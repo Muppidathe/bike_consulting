@@ -6,6 +6,8 @@ from PIL import Image
 image=None
 if 'delete_result' not in st.session_state:
     st.session_state['delete_result']=()
+if 'delete_exp_result' not in st.session_state:
+    st.session_state['delete_exp_result']=[]
 mydb,dbcursor=connection()
 def fetch_vehicle(vehicle_no):
     try:
@@ -24,8 +26,22 @@ def fetch_vehicle(vehicle_no):
         st.error(f'while fetching image {e}')
         st.stop()
         return None
+def fetch_expenses(vehicle_no):
+    try:
+        query="select id,vehicle_num,vehicle_expenses_date,description,amount from vehicle_expenses WHERE vehicle_num = %s;"
+        dbcursor.execute(query, (vehicle_no,))
+        result = dbcursor.fetchall()
+        if result:
+            return result
+        else:
+            return None
 
-def delete(vehicle_no):
+    except Exception as e:
+        st.error(f'while fetching expenses {e}')
+        st.stop()
+        return None
+
+def delete_vehicle(vehicle_no):
 
     try:
         vehicle_delete_query="delete from vehicle where vehicle_no=%s"
@@ -37,6 +53,16 @@ def delete(vehicle_no):
         st.balloons()
     except Exception as e:
         st.error(f"error while deleting {e}")
+def delete_expenses(id):
+
+    try:
+        vehicle_delete_query="delete from vehicle_expenses where id=%s "
+        dbcursor.execute(vehicle_delete_query,(id,))
+        mydb.commit()
+        st.success('vehicle expenses deleted')
+        st.balloons()
+    except Exception as e:
+        st.error(f"error while deleting {e}")
 #-------------------------------------------------------------------------------------------------------
 #form1
 with st.form("fetch_details"):
@@ -45,6 +71,8 @@ with st.form("fetch_details"):
     if fetch_submit:
         result=fetch_vehicle(vehicle_no)
         st.session_state.delete_result=result
+        result=fetch_expenses(vehicle_no)
+        st.session_state.delete_exp_result=result
 #form2
 result=st.session_state.delete_result
 if result:
@@ -64,4 +92,20 @@ if result:
         sales_price=st.number_input(placeholder="80000",label="Cost Price",value=result[8],disabled=True)
         submit=st.form_submit_button(label="delete")
         if submit:
-            delete(vehicle_no)
+            delete_vehicle(vehicle_no)
+#form3
+st.header("Expenses")
+result=st.session_state.delete_exp_result
+if result:
+    for i in result:
+        with st.form(key=str(i[0])):
+            id=i[0]
+            vehicle_no=i[1]
+            expense_date=st.date_input(label="expense date",value=i[2],disabled=True)
+            desc=st.text_input(label="Description",value=i[3],disabled=True)
+            expense=st.number_input(label="expenses",value=i[4],disabled=True)
+            submit=st.form_submit_button(label="delete")
+            if submit:
+                delete_expenses(id)
+else:
+    st.info("no Expenses found for this vehicle")
