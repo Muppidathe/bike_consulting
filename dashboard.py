@@ -115,9 +115,9 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Table display
-dataframe_query = f"select vehicle_no,image,model,cc,purchase_date,cost_price,fine,sum(amount),cost_price+fine+sum(amount),sales_date,sales_price from vehicle v left join vehicle_expenses ve on v.vehicle_no=ve.vehicle_num where month(purchase_date)>=month('{inp_date}') and month(purchase_date)<=month('{inp_date}')+{no_of_month}"
+dataframe_query = f"select vehicle_no,image,model,cc,purchase_date,cost_price,fine,sum(amount) as expenses,cost_price+fine+sum(amount) as 'total cost price',sales_date,sales_price from vehicle v left join vehicle_expenses ve on v.vehicle_no=ve.vehicle_num where purchase_date>={inp_date} and purchase_date<=DATE_ADD('{inp_date}', INTERVAL {no_of_month} MONTH)"
 df = pd.read_sql(dataframe_query, mydb)
 df.index = df.index + 1
-if len(df.index)>1:
+if len(df.index)>0:
     df['image'] = df['image'].map(path_to_image_html)
     st.write(df.to_html(escape=False), unsafe_allow_html=True)
