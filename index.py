@@ -8,9 +8,12 @@ pages={"DashBoard":[st.Page(page="dashboard.py",title="dashboard",icon=":materia
        "Office Management":[st.Page(page="create_office_expenses.py",title="add office expenses",icon=':material/payments:'),
                             st.Page(page="edit_office_expenses.py",title="edit office expenses",icon=':material/payments:'),
                             st.Page(page="delete_office_expenses.py",title="delete office Expenses",icon=":material/list_alt:")],
-       "Bills payable":[st.Page(page="create_bills_payable.py",title="Create bills payable",icon=':material/payments:'),
+       "Bills payable":[st.Page(page="bills_dashboard.py",title="dashboard",icon=":material/bar_chart_4_bars:"),
+                        st.Page(page="create_bills_payable.py",title="Create bills payable",icon=':material/payments:'),
+                        st.Page(page="bills.py",title="add bills",icon=':material/payments:'),
                         st.Page(page="edit_bills.py",title="edit bills",icon=':material/payments:'),
-                        st.Page(page="bills.py",title="add bills",icon=':material/payments:')]}
+                        st.Page(page="delete_bills.py",title="delete bills",icon=':material/payments:')
+                        ]}
 
 
 pg=st.navigation(pages,)

@@ -58,7 +58,7 @@ st.markdown("""
         flex-wrap: wrap;
         gap: 1rem;
         width: 100%;
-        margin-bottom: 2    %;
+        margin-bottom: 2%;
     }
     .stat-card {
         background-color: #7a7a7a;
