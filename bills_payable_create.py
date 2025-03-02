@@ -4,20 +4,16 @@ from db import connection
 import os
 st.set_page_config(layout="wide")
 mydb,dbcursor=connection()
-def insert(name,number,date,amount):
+def insert(name,number):
     if not name:
         st.error("enter the Name")
     elif not number:
         st.error("enter the Mobile Number")
-    elif not date:
-        st.error("enter the date")
-    elif not amount:
-        st.error("Amount required")
     else:
         try:
             vehicle_add_query = """
             INSERT INTO bills_payable (name,phone_no) 
-            VALUES (%s, %s,);
+            VALUES (%s, %s);
         """
             dbcursor.execute(vehicle_add_query, (name,number))
             mydb.commit()

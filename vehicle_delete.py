@@ -11,7 +11,7 @@ if 'delete_exp_result' not in st.session_state:
 mydb,dbcursor=connection()
 def fetch_vehicle(vehicle_no):
     try:
-        query = "SELECT image,vehicle_no,model,cc,purchase_date,cost_price,fine,sales_date,sales_price FROM vehicle  WHERE vehicle_no = %s"
+        query = "SELECT image,vehicle_no,model,cc,purchase_date,cost_price,fine,buyer_name,ifnull(aadhar_no,0),phone_no,sales_date,sales_price,received_amount FROM vehicle  WHERE vehicle_no = %s"
 
         dbcursor.execute(query, (vehicle_no,))
         result = dbcursor.fetchone()
@@ -88,8 +88,12 @@ if result:
         purchase_date=st.date_input(label="Purchasing Date",value=result[4],disabled=True)
         cost_price=st.number_input(placeholder="80000",label="Cost Price",value=result[5],disabled=True)
         fine=st.number_input(placeholder="1500",label="Fine Amount",value=result[6],disabled=True)
-        sales_date=st.date_input(label="Purchasing Date",value=result[7],disabled=True)
-        sales_price=st.number_input(placeholder="80000",label="Cost Price",value=result[8],disabled=True)
+        name=st.text_input(placeholder="muppidathi",label='Buyer Name',value=result[7],disabled=True)
+        aadhar_no=st.number_input(placeholder='94** **** ****',label='Aadhar no',value=int(result[8]),disabled=True)
+        phone_no=st.number_input(placeholder='1234****',label='phone no',value=int(result[9]),disabled=True)
+        sales_date=st.date_input(label="sales Date",value=result[10],disabled=True)
+        sales_price=st.number_input(placeholder="80000",label="Cost Price",value=result[11],disabled=True)
+        received_amount=st.number_input(placeholder="80000",label="received amount",value=result[12],disabled=True)
         submit=st.form_submit_button(label="delete")
         if submit:
             delete_vehicle(vehicle_no)

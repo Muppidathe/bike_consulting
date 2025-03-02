@@ -24,7 +24,7 @@ def fetch_vehicle(date):
         st.stop()
         return None
 
-def edit(id,expense_date,desc,expense):
+def edit_info(id,expense_date,desc,expense):
     vehicle_edit_query = """
         UPDATE office_expenses
         SET  date=%s,description=%s,amount=%s
@@ -57,4 +57,4 @@ if result:
             expense=st.number_input(label="expenses",value=i[3],min_value=0)
             edit=st.form_submit_button(label="Edit")
             if edit:
-                edit(id,expense_date,desc,expense)
+                edit_info(id,expense_date,desc,expense)

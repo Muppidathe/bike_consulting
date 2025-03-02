@@ -9,7 +9,7 @@ mydb, dbcursor = connection()
 
 def fetch_bills(name, phone_no):
     try:
-        query = "SELECT id, name, phone_no, payable_date, amount FROM bills_payable WHERE name = %s AND phone_no = %s"
+        query = "SELECT id, name, phone_no FROM bills_payable WHERE name = %s AND phone_no = %s"
         dbcursor.execute(query, (name, phone_no))
         result = dbcursor.fetchone()
         
@@ -32,7 +32,7 @@ def add_bills(id, bills_date, bills):
         st.error("Please provide an amount.")
     else:
         try:
-            query = "INSERT INTO bills (user_id, date, amount) VALUES (%s, %s, %s);"
+            query = "INSERT INTO bills (user_id, date, amount,given) VALUES (%s, %s, %s,1);"
             dbcursor.execute(query, (id, bills_date, bills))
             mydb.commit()
             st.success("Bill has been added successfully.")
@@ -47,8 +47,8 @@ def less_bills(id, bills_date, bills):
         st.error("Please provide an amount.")
     else:
         try:
-            query = "INSERT INTO bills (user_id, date, amount) VALUES (%s, %s, %s);"
-            dbcursor.execute(query, (id, bills_date, -bills))
+            query = "INSERT INTO bills (user_id, date, amount,given) VALUES (%s, %s, %s,0);"
+            dbcursor.execute(query, (id, bills_date, bills))
             mydb.commit()
             st.success("Bill has been deducted successfully.")
             st.balloons()

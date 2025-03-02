@@ -12,17 +12,23 @@ mydb, dbcursor = connection()
 
 
 # Queries
-given="select sum(amount) from bills_payable;"
-taken="select sum(amount) from bills;"
+
+given="select sum(amount) from bills where given=1;"
+taken="select sum(amount) from bills where given=0;"
 # Execute queries and get results
+
+
 dbcursor.execute(given)
 res = dbcursor.fetchone()
-given_price = res[0]
-
+if res[0]:
+    given_price=res[0]
+else:
+    given_price=0
 dbcursor.execute(taken)
 res = dbcursor.fetchone()
-taken_price = res[0]
-if not taken_price:
+if res[0]:
+    taken_price=res[0]
+else:
     taken_price=0
 yet_to_come=given_price-taken_price
 # CSS for responsive cards
@@ -86,7 +92,8 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Table display
-dataframe_query = f"select name,phone_no,payable_date,bp.amount,date,sum(b.amount) as 'money taken' from bills_payable bp left join bills b on bp.id=b.user_id;"
+dataframe_query = f"select name,phone_no,date,sum(if(given=1,amount,0)) as 'money given',sum(if(given=0,amount,0)) as 'money taken',sum(if(given=1,amount,0))-sum(if(given=0,amount,0)) as 'balance' from bills_payable bp left join bills b on bp.id=b.user_id;"
+st.write(dataframe_query)
 df = pd.read_sql(dataframe_query, mydb)
 df.index = df.index + 1
 if len(df.index)>0:

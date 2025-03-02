@@ -17,7 +17,7 @@ def save_uploaded_file(uploaded_file,vehicle_no):
     return file_path
 def fetch_vehicle(vehicle_no):
     try:
-        query = "SELECT image,vehicle_no,model,cc,purchase_date,cost_price,fine,sales_date,sales_price FROM vehicle  WHERE vehicle_no = %s"
+        query = "SELECT image,vehicle_no,model,cc,purchase_date,cost_price,fine,buyer_name,ifnull(aadhar_no,0),phone_no,sales_date,sales_price,received_amount FROM vehicle  WHERE vehicle_no = %s"
 
         dbcursor.execute(query, (vehicle_no,))
         result = dbcursor.fetchone()
@@ -134,8 +134,12 @@ if result:
         purchase_date=st.date_input(label="Purchasing Date",value=result[4])
         cost_price=st.number_input(placeholder="80000",label="Cost Price",value=result[5])
         fine=st.number_input(placeholder="1500",label="Fine Amount",value=result[6])
-        sales_date=st.date_input(label="Purchasing Date",value=result[7])
-        sales_price=st.number_input(placeholder="80000",label="Cost Price",value=result[8])
+        name=st.text_input(placeholder="muppidathi",label='Buyer Name',value=result[7])
+        aadhar_no=st.number_input(placeholder='94** **** ****',label='Aadhar no',value=int(result[8]))
+        phone_no=st.number_input(placeholder='1234****',label='phone no',value=int(result[9]))
+        sales_date=st.date_input(label="Sales Date",value=result[10])
+        sales_price=st.number_input(placeholder="80000",label="Cost Price",value=result[11])
+        received_amount=st.number_input(placeholder="80000",label="received amount",value=result[12])
         submit=st.form_submit_button(label="Edit")
         if submit:
             edit_vehilce(vehicle_no,image_inp,model,cc,purchase_date,cost_price,fine,sales_date,sales_price)
