@@ -24,7 +24,7 @@ def fetch_vehicle(date):
         st.stop()
         return None
 
-def delete(id):
+def delete_info(id):
 
     try:
         vehicle_delete_query="delete from office_expenses where id=%s "
@@ -53,4 +53,4 @@ if result:
             expense=st.number_input(label="expenses",value=i[3],min_value=0,disabled=True)
             delete=st.form_submit_button(label="delete")
             if delete:
-                delete(id)
+                delete_info(id)

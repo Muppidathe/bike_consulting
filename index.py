@@ -1,16 +1,23 @@
 import streamlit as st
-pages={"DashBoard":[st.Page(page="dashboard.py",title="dashboard",icon=":material/bar_chart_4_bars:")],
-       "Manage vechile":[st.Page(page="add_vehicle.py",title="create vechile info",icon=":material/add:"),
-                         st.Page(page="add_vehicle_expenses.py",title="add expenses to vechile",icon=":material/add_notes:"),
-                         st.Page(page="edit_vehicle.py",title="Edit Vehicles",icon=":material/list_alt:"),
-                         st.Page(page="delete_vehicle.py",title="delete vehicle",icon=":material/list_alt:"),
-                         st.Page(page="list_all_vehicle.py",title="vehicle list",icon=":material/list_alt:")],
-       "Office Management":[st.Page(page="create_office_expenses.py",title="add office expenses",icon=':material/payments:'),
-                            st.Page(page="edit_office_expenses.py",title="edit office expenses",icon=':material/payments:'),
-                            st.Page(page="delete_office_expenses.py",title="delete office Expenses",icon=":material/list_alt:")],
-       "Bills payable":[st.Page(page="create_bills_payable.py",title="Create bills payable",icon=':material/payments:'),
-                        st.Page(page="edit_bills.py",title="edit bills",icon=':material/payments:'),
-                        st.Page(page="bills.py",title="add bills",icon=':material/payments:')]}
+pages={"Manage vechile":[st.Page(page="vehicle_dashboard.py",title="Dashboard",icon=":material/bar_chart_4_bars:"),
+                        st.Page(page="vehicle_add.py",title="Create Vehicle Info",icon=":material/add:"),
+                         st.Page(page="vehicle_expenses_add.py",title="Add Expenses To Vehicle",icon=":material/add_notes:"), 
+                         st.Page(page="vehicle_sales.py",title="Vehicle Sold",icon=":material/check_small:"),
+                         st.Page(page="vehicle_view.py",title="View Vehicle",icon=":material/visibility:"),
+                         st.Page(page="vehicle_edit.py",title="Edit Vehicles",icon=":material/edit:"),
+                         st.Page(page="vehicle_delete.py",title="Delete Vehicle",icon=":material/delete:")],
+       "Office Management":[st.Page("office_dashboard.py",title="Dashboard",icon=':material/payments:'),
+                            st.Page(page="office_expenses_create.py",title="Add Office Expenses",icon=':material/add:'),
+                            st.Page(page="office_expenses_edit.py",title="Edit Office Expenses",icon=':material/edit:'),
+                            st.Page(page="office_expenses_delete.py",title="Delete Office Expenses",icon=":material/delete:")],
+       "Bills Payable":[st.Page(page="bills_dashboard.py",title="Dashboard",icon=":material/payments:"),
+                        st.Page(page="bills_payable_create.py",title="Create Bills Payable",icon=':material/add:'),
+                        st.Page(page="bills_add_deduct.py",title="Add/Deduct Bills",icon=':material/add_notes:'),
+                        st.Page(page="bills_view.py",title="View Bills",icon=":material/visibility:"),
+                        st.Page(page="bills_edit.py",title="Edit Bills",icon=':material/edit:'),
+                        st.Page(page="bills_delete.py",title="Delete Bills",icon=':material/delete:')
+                        ],
+       "Business Insights":[st.Page(page="test.py",title="Chat bOt",icon=":material/smart_toy:")]}
 
 
 pg=st.navigation(pages,)

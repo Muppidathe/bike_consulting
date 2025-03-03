@@ -8,7 +8,7 @@ if 'edit_bills_result' not in st.session_state:
 mydb,dbcursor=connection()
 def fetch_bills_payable(name,phone_no):
     try:
-        query = "SELECT id,name,phone_no,payable_date,amount FROM bills_payable WHERE name= %s and phone_no=%s"
+        query = "SELECT id,name,phone_no FROM bills_payable WHERE name= %s and phone_no=%s"
         dbcursor.execute(query, (name,phone_no))
         result = dbcursor.fetchone()
         if result:
@@ -53,22 +53,18 @@ def edit_bills(id,bills_date,bills):
             st.balloons()
         except Exception as e:
             st.error(f"error while upadating bills {e}")
-def edit_bills_payable(id,name,phone_no,bills_payable_date,payable_amount):
+def edit_bills_payable(id,name,phone_no):
     if not name:
         st.error("enter the Name")
     elif not phone_no:
         st.error("enter the Mobile Number")
-    elif not bills_payable_date:
-        st.error("enter the date")
-    elif not payable_amount:
-        st.error("Amount required")
     else:
         try:
             vehicle_add_query = """
-            update bills_payable set name=%s,phone_no=%s,payable_date=%s,amount=%s 
+            update bills_payable set name=%s,phone_no=%s 
             where id=%s;
         """
-            dbcursor.execute(vehicle_add_query, (name,phone_no,bills_payable_date,payable_amount,id))
+            dbcursor.execute(vehicle_add_query, (name,phone_no,id))
             mydb.commit()
             st.success('bills payable has edited')
             st.balloons()
@@ -91,11 +87,9 @@ if result:
     with st.form('edit_payable'):
         name=st.text_input(placeholder="kannan",label="name",value=result[1])
         phone_no=st.number_input(placeholder="956642**",label="phone_no",value=int(result[2]))
-        bills_payable_date=st.date_input(label="bills Date",value=result[3])
-        payable_amount=st.number_input(placeholder="800",label="Amount",value=result[4])
         submit=st.form_submit_button(label="edit")
         if submit:
-            edit_bills_payable(result[0],name,phone_no,bills_payable_date,payable_amount)
+            edit_bills_payable(result[0],name,phone_no)
 ## form 3
 st.header("bills")
 result=st.session_state.edit_bills_result
@@ -108,3 +102,5 @@ if result:
             submit=st.form_submit_button(label="Edit")
             if submit:
                 edit_bills(id,bills_date,amount)
+else:
+    st.info("No bills found")
