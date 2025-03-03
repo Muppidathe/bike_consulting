@@ -1,69 +1,33 @@
 from typing import List, Any, Annotated, Dict, Optional
 from typing_extensions import TypedDict
 import operator
-import mysql.connector
-import os
 import json
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
 from langchain_groq import ChatGroq
-from langgraph.graph import StateGraph, END
-
-# Define TypedDicts
-class InputState(TypedDict):
-    question: str
-    uuid: str
-    parsed_question: Dict[str, Any]
-    unique_nouns: List[str]
-    sql_query: str
-    results: List[Any]
-    visualization: Annotated[str, operator.add]
-
-class OutputState(TypedDict):
-    parsed_question: Dict[str, Any]
-    unique_nouns: List[str]
-    sql_query: str
-    sql_valid: bool
-    sql_issues: str
-    results: List[Any]
-    answer: Annotated[str, operator.add]
-    error: str
-    visualization: Annotated[str, operator.add]
-    visualization_reason: Annotated[str, operator.add]
-    formatted_data_for_visualization: Dict[str, Any]
-############
-
+from langgraph.graph import StateGraph, END,START
+from pydantic import BaseModel,Field
 import mysql.connector
 from mysql.connector import Error
-
-def extract_schema_metadata():
-    """
-    Connects to a MySQL database and extracts schema and metadata.
-    
-    For each table, it retrieves:
-      - The CREATE TABLE statement.
-      - The column names.
-      - Up to 3 sample rows.
-    
-    Parameters:
-        database_name (str): The name of the MySQL database.
-    
-    Returns:
-        dict: A dictionary with table names as keys and details as values.
-    """
+####################### start of dependency ############
+def connect():
     try:
-        # Connect to the MySQL database
-        connection = mysql.connector.connect(
-            host='localhost',
+        db= mysql.connector.connect(
+            host="localhost",
             port=3306,
-            user='root',
-            password='',
-            database="walmart"
+            user="root",
+            password="",
+            database="sasi_kannan"
         )
-        
-        if connection.is_connected():
-            cursor = connection.cursor()
-            
+        return db
+    except Error as e:
+        print("Error while connecting to MySQL", e)
+        return None
+#node-1 dependency
+def get_schema() -> str:
+    try: 
+        db=connect()
+        if db.is_connected():
+            cursor=db.cursor()        
             # Fetch list of tables
             cursor.execute("SHOW TABLES")
             tables = cursor.fetchall()
@@ -89,79 +53,28 @@ def extract_schema_metadata():
             
             cursor.close()
             return schema_details
+    except mysql.connector.Error as e:
+        raise Exception(f"Error executing query: {str(e)}")
 
-    except Error as e:
-        print("Error while connecting to MySQL", e)
-        return None
-
-    finally:
-        if 'connection' in locals() and connection.is_connected():
-            connection.close()
-
-
-
-# Database Manager Functions
-def get_schema(uuid: str) -> str:
-    """Retrieve the database schema."""
-    return extract_schema_metadata()
-
+#node-2 dependency
 def execute_query( query: str) -> List[Any]:
     """Execute SQL query on the MySQL database and return results."""
     try:
         # Connect to MySQL
-        connection = mysql.connector.connect(
-            host="localhost",
-            port=3306,
-            user="root",
-            password="",
-            database="walmart"
-        )
-        cursor = connection.cursor()
+        db=connect()
+        cursor = db.cursor()
 
         # Execute query
         cursor.execute(query)
         results = cursor.fetchall()
 
         cursor.close()
-        connection.close()
+        db.close()
 
         return results
     except mysql.connector.Error as e:
         raise Exception(f"Error executing query: {str(e)}")
-
-# Data Formatter Functions
-llm = ChatGroq(model="llama-3.3-70b-specdec",api_key="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")
-
-def format_data_for_visualization(state: dict) -> dict:
-    """Format the data for the chosen visualization type."""
-    visualization = state['visualization']
-    results = state['results']
-    question = state['question']
-    sql_query = state['sql_query']
-
-    if visualization == "none":
-        return {"formatted_data_for_visualization": None}
-    
-    if visualization == "scatter":
-        try:
-            return _format_scatter_data(results)
-        except Exception as e:
-            return _format_other_visualizations(visualization, question, sql_query, results)
-    
-    if visualization == "bar" or visualization == "horizontal_bar":
-        try:
-            return _format_bar_data(results, question)
-        except Exception as e:
-            return _format_other_visualizations(visualization, question, sql_query, results)
-    
-    if visualization == "line":
-        try:
-            return _format_line_data(results, question)
-        except Exception as e:
-            return _format_other_visualizations(visualization, question, sql_query, results)
-    
-    return _format_other_visualizations(visualization, question, sql_query, results)
-
+#node-8 dependency
 def _format_line_data(results, question):
     if isinstance(results, str):
         results = eval(results)
@@ -317,317 +230,6 @@ def _format_other_visualizations(visualization, question, sql_query, results):
         return {"formatted_data_for_visualization": formatted_data_for_visualization}
     except json.JSONDecodeError:
         return {"error": "Failed to format data for visualization", "raw_response": response}
-
-# SQL Agent Functions
-def parse_question(state: dict) -> dict:
-    """Parse user question and identify relevant tables and columns."""
-    question = state['question']
-    schema = get_schema(state['uuid'])
-
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", '''You are a data analyst that can help summarize SQL tables and parse user questions about a database. 
-Given the question and database schema, identify the relevant tables and columns. 
-If the question is not relevant to the database or if there is not enough information to answer the question, set is_relevant to false.
-
-Your response should be in the following JSON format:
-{{
-    "is_relevant": boolean,
-    "relevant_tables": [
-        {{
-            "table_name": string,
-            "columns": [string],
-            "noun_columns": [string]
-        }}
-    ]
-}}
-
-The "noun_columns" field should contain only the columns that are relevant to the question and contain nouns or names, for example, the column "Artist name" contains nouns relevant to the question "What are the top selling artists?", but the column "Artist ID" is not relevant because it does not contain a noun. Do not include columns that contain numbers.
-'''),
-        ("human", "===Database schema:\n{schema}\n\n===User question:\n{question}\n\nIdentify relevant tables and columns:")
-    ])
-
-    output_parser = JsonOutputParser()
-    
-    response = llm.invoke(prompt.format_messages(schema=schema, question=question)).content
-    parsed_response = output_parser.parse(response)
-    return {"parsed_question": parsed_response}
-
-def get_unique_nouns(state: dict) -> dict:
-    """Find unique nouns in relevant tables and columns."""
-    parsed_question = state['parsed_question']
-    
-    if not parsed_question['is_relevant']:
-        return {"unique_nouns": []}
-
-    unique_nouns = set()
-    for table_info in parsed_question['relevant_tables']:
-        table_name = table_info['table_name']
-        noun_columns = table_info['noun_columns']
-        
-        if noun_columns:
-            column_names = ', '.join(f"{col}" for col in noun_columns)
-            query = f"SELECT DISTINCT {column_names} FROM {table_name}"
-            results = execute_query(query)
-            for row in results:
-                unique_nouns.update(str(value) for value in row if value)
-
-    return {"unique_nouns": list(unique_nouns)}
-
-def generate_sql(state: dict) -> dict:
-    """Generate SQL query based on parsed question and unique nouns."""
-    question = state['question']
-    parsed_question = state['parsed_question']
-    unique_nouns = state['unique_nouns']
-
-    if not parsed_question['is_relevant']:
-        return {"sql_query": "NOT_RELEVANT", "is_relevant": False}
-    
-    schema = get_schema(state['uuid'])
-
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", '''
-You are an AI assistant that generates SQL queries based on user questions, database schema, and unique nouns found in the relevant tables. Generate a valid SQL query to answer the user's question.
-
-If there is not enough information to write a SQL query, respond with "NOT_ENOUGH_INFO".
-
-Here are some examples:
-
-1. What is the top selling product?
-Answer: SELECT product_name, SUM(quantity) as total_quantity FROM sales WHERE product_name IS NOT NULL AND quantity IS NOT NULL AND product_name != "" AND quantity != "" AND product_name != "N/A" AND quantity != "N/A" GROUP BY product_name ORDER BY total_quantity DESC LIMIT 1
-
-2. What is the total revenue for each product?
-Answer: SELECT \product name\, SUM(quantity * price) as total_revenue FROM sales WHERE \product name\ IS NOT NULL AND quantity IS NOT NULL AND price IS NOT NULL AND \product name\ != "" AND quantity != "" AND price != "" AND \product name\ != "N/A" AND quantity != "N/A" AND price != "N/A" GROUP BY \product name\  ORDER BY total_revenue DESC
-
-3. What is the market share of each product?
-Answer: SELECT \product name\, SUM(quantity) * 100.0 / (SELECT SUM(quantity) FROM sa  les) as market_share FROM sales WHERE \product name\ IS NOT NULL AND quantity IS NOT NULL AND \product name\ != "" AND quantity != "" AND \product name\ != "N/A" AND quantity != "N/A" GROUP BY \product name\  ORDER BY market_share DESC
-
-4. Plot the distribution of income over time
-Answer: SELECT income, COUNT(*) as count FROM users WHERE income IS NOT NULL AND income != "" AND income != "N/A" GROUP BY income
-
-THE RESULTS SHOULD ONLY BE IN THE FOLLOWING FORMAT, SO MAKE SURE TO ONLY GIVE TWO OR THREE COLUMNS:
-[[x, y]]
-or 
-[[label, x, y]]
-             
-For questions like "plot a distribution of the fares for men and women", count the frequency of each fare and plot it. The x axis should be the fare and the y axis should be the count of people who paid that fare.
-SKIP ALL ROWS WHERE ANY COLUMN IS NULL or "N/A" or "".
-Just give the query string. Do not format it. Make sure to use the correct spellings of nouns as provided in the unique nouns list. All the table and column names should be enclosed in backticks.
-'''),
-        ("human", '''===Database schema:
-{schema}
-
-===User question:
-{question}
-
-===Relevant tables and columns:
-{parsed_question}
-
-===Unique nouns in relevant tables:
-{unique_nouns}
-
-Generate SQL query string'''),
-    ])
-
-    response = llm.invoke(prompt.format_messages(schema=schema, question=question, parsed_question=parsed_question, unique_nouns=unique_nouns)).content
-    
-    if response.strip() == "NOT_ENOUGH_INFO":
-        return {"sql_query": "NOT_RELEVANT"}
-    else:
-        return {"sql_query": response}
-
-def validate_and_fix_sql(state: dict) -> dict:
-    """Validate and fix the generated SQL query."""
-    sql_query = state['sql_query']
-
-    if sql_query == "NOT_RELEVANT":
-        return {"sql_query": "NOT_RELEVANT", "sql_valid": False}
-    
-    schema = get_schema(state['uuid'])
-
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", r'''
-You are an AI assistant that validates and fixes SQL queries. Your task is to:
-1. Check if the SQL query is valid.
-2. Ensure all table and column names are correctly spelled and exist in the schema. All the table and column names should be enclosed in backticks.
-3. If there are any issues, fix them and provide the corrected SQL query.
-4. If no issues are found, return the original query.
-
-Respond in JSON format with the following structure. Only respond with the JSON:
-{{
-    "valid": boolean,
-    "issues": string or null,
-    "corrected_query": string
-}}
-'''),
-        ("human", r"""===Database schema:
-{schema}
-
-===Generated SQL query:
-{sql_query}
-
-Respond in JSON format with the following structure. Only respond with the JSON:
-{{
-    "valid": boolean,
-    "issues": string or null,
-    "corrected_query": string
-}}
-
-For example:
-1. {{
-    "valid": true,
-    "issues": null,
-    "corrected_query": "None"
-}}
-             
-2. {{
-    "valid": false,
-    "issues": "Column USERS does not exist",
-    "corrected_query": "SELECT * FROM \users\ WHERE age > 25"
-}}
-
-3. {{
-    "valid": false,
-    "issues": "Column names and table names should be enclosed in backticks if they contain spaces or special characters",
-    "corrected_query": "SELECT * FROM \gross income\ WHERE \age\ > 25"
-}}
-             
-""")
-    ])
-
-    output_parser = JsonOutputParser()
-    response = llm.invoke(prompt.format_messages(schema=schema, sql_query=sql_query)).content
-    result = output_parser.parse(response)
-
-    if result["valid"] and result["issues"] is None:
-        return {"sql_query": sql_query, "sql_valid": True}
-    else:
-        return {
-            "sql_query": result["corrected_query"],
-            "sql_valid": result["valid"],
-            "sql_issues": result["issues"]
-        }
-
-def execute_sql(state: dict) -> dict:
-    """Execute SQL query and return results."""
-    query = state['sql_query']
-    uuid = state['uuid']
-    
-    if query == "NOT_RELEVANT":
-        return {"results": "NOT_RELEVANT"}
-
-    try:
-        results = execute_query(query)
-        return {"results": results}
-    except Exception as e:
-        return {"error": str(e)}
-
-def format_results(state: dict) -> dict:
-    """Format query results into a human-readable response."""
-    question = state['question']
-    results = state['results']
-
-    if results == "NOT_RELEVANT":
-        return {"answer": "Sorry, I can only give answers relevant to the database."}
-
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are an AI assistant that formats database query results into a human-readable response. Give a conclusion to the user's question based on the query results. Do not give the answer in markdown format. Only give the answer in one line."),
-        ("human", "User question: {question}\n\nQuery results: {results}\n\nFormatted response:"),
-    ])
-
-    response = llm.invoke(prompt.format_messages(question=question, results=results)).content
-    return {"answer": response}
-
-def choose_visualization(state: dict) -> dict:
-    """Choose an appropriate visualization for the data."""
-    question = state['question']
-    results = state['results']
-    sql_query = state['sql_query']
-
-    if results == "NOT_RELEVANT":
-        return {"visualization": "none", "visualization_reasoning": "No visualization needed for irrelevant questions."}
-
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", '''
-You are an AI assistant that recommends appropriate data visualizations. Based on the user's question, SQL query, and query results, suggest the most suitable type of graph or chart to visualize the data. If no visualization is appropriate, indicate that.
-
-Available chart types and their use cases:
-- Bar Graphs: Best for comparing categorical data or showing changes over time when categories are discrete and the number of categories is more than 2. Use for questions like "What are the sales figures for each product?" or "How does the population of cities compare? or "What percentage of each city is male?"
-- Horizontal Bar Graphs: Best for comparing categorical data or showing changes over time when the number of categories is small or the disparity between categories is large. Use for questions like "Show the revenue of A and B?" or "How does the population of 2 cities compare?" or "How many men and women got promoted?" or "What percentage of men and what percentage of women got promoted?" when the disparity between categories is large.
-- Scatter Plots: Useful for identifying relationships or correlations between two numerical variables or plotting distributions of data. Best used when both x axis and y axis are continuous. Use for questions like "Plot a distribution of the fares (where the x axis is the fare and the y axis is the count of people who paid that fare)" or "Is there a relationship between advertising spend and sales?" or "How do height and weight correlate in the dataset? Do not use it for questions that do not have a continuous x axis."
-- Pie Charts: Ideal for showing proportions or percentages within a whole. Use for questions like "What is the market share distribution among different companies?" or "What percentage of the total revenue comes from each product?"
-- Line Graphs: Best for showing trends and distributionsover time. Best used when both x axis and y axis are continuous. Used for questions like "How have website visits changed over the year?" or "What is the trend in temperature over the past decade?". Do not use it for questions that do not have a continuous x axis or a time based x axis.
-
-Consider these types of questions when recommending a visualization:
-1. Aggregations and Summarizations (e.g., "What is the average revenue by month?" - Line Graph)
-2. Comparisons (e.g., "Compare the sales figures of Product A and Product B over the last year." - Line or Column Graph)
-3. Plotting Distributions (e.g., "Plot a distribution of the age of users" - Scatter Plot)
-4. Trends Over Time (e.g., "What is the trend in the number of active users over the past year?" - Line Graph)
-5. Proportions (e.g., "What is the market share of the products?" - Pie Chart)
-6. Correlations (e.g., "Is there a correlation between marketing spend and revenue?" - Scatter Plot)
-
-Provide your response in the following format:
-Recommended Visualization: [Chart type or "None"]. ONLY use the following names: bar, horizontal_bar, line, pie, scatter, none
-Reason: [Brief explanation for your recommendation]
-'''),
-        ("human", '''
-User question: {question}
-SQL query: {sql_query}
-Query results: {results}
-
-Recommend a visualization:'''),
-    ])
-
-    response = llm.invoke(prompt.format_messages(question=question, sql_query=sql_query, results=results)).content
-    
-    lines = response.split('\n')
-    visualization = lines[0].split(': ')[1]
-    reason = lines[1].split(': ')[1]
-
-    return {"visualization": visualization, "visualization_reason": reason}
-
-# Workflow Manager Functions
-def create_workflow() -> StateGraph:
-    """Create and configure the workflow graph."""
-    workflow = StateGraph(input=InputState, output=OutputState)
-
-    # Add nodes to the graph
-    workflow.add_node("parse_question", parse_question)
-    workflow.add_node("get_unique_nouns", get_unique_nouns)
-    workflow.add_node("generate_sql", generate_sql)
-    workflow.add_node("validate_and_fix_sql", validate_and_fix_sql)
-    workflow.add_node("execute_sql", execute_sql)
-    workflow.add_node("format_results", format_results)
-    workflow.add_node("choose_visualization", choose_visualization)
-    workflow.add_node("format_data_for_visualization", format_data_for_visualization)
-    
-    # Define edges
-    workflow.add_edge("parse_question", "get_unique_nouns")
-    workflow.add_edge("get_unique_nouns", "generate_sql")
-    workflow.add_edge("generate_sql", "validate_and_fix_sql")
-    workflow.add_edge("validate_and_fix_sql", "execute_sql")
-    workflow.add_edge("execute_sql", "format_results")
-    workflow.add_edge("execute_sql", "choose_visualization")
-    workflow.add_edge("choose_visualization", "format_data_for_visualization")
-    workflow.add_edge("format_data_for_visualization", END)
-    workflow.add_edge("format_results", END)
-    workflow.set_entry_point("parse_question")
-
-    return workflow
-
-def returnGraph():
-    return create_workflow().compile()
-
-def run_sql_agent(question: str, uuid: str) -> dict:
-    """Run the SQL agent workflow and return the formatted answer and visualization recommendation."""
-    app = create_workflow().compile()
-    result = app.invoke({"question": question, "uuid": uuid})
-    return {
-        "answer": result['answer'],
-        "visualization": result['visualization'],
-        "visualization_reason": result['visualization_reason'],
-        "formatted_data_for_visualization": result['formatted_data_for_visualization']
-    }
-
 # Graph Instructions
 barGraphIntstruction = '''
   Where data is: {
@@ -765,8 +367,7 @@ data = {
 // Note: Each object in the 'data' array represents a point on the scatter plot.
 // The 'x' and 'y' values determine the position of the point, and 'id' is a unique identifier.
 // Multiple series can be represented, each as an object in the outer array.
-'''
-
+'''    
 graph_instructions = {
     "bar": barGraphIntstruction,
     "horizontal_bar": horizontalBarGraphIntstruction,
@@ -775,7 +376,324 @@ graph_instructions = {
     "scatter": scatterPlotIntstruction
 }
 
-# Example usage
-graph = returnGraph()
-result = run_sql_agent("city wise sales", "some-uuid")
-print(result)
+###############end of dependecy###############################################
+
+llm = ChatGroq(model="llama-3.3-70b-specdec",api_key="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")
+# Define TypedDicts
+class State(TypedDict):
+    question: str
+    parsed_question: Dict[str, Any]
+    unique_nouns: List[str]
+    sql_query: str
+    results: List[Any]
+    visualization: Annotated[str, operator.add]
+    sql_valid: bool
+    sql_issues: str
+    answer: Annotated[str, operator.add]
+    error: str
+    visualization_reason: Annotated[str, operator.add]
+    formatted_data_for_visualization: Dict[str, Any]
+    is_relevant:bool
+class parse_question_stuct_inner(BaseModel):
+    table_name: str=Field(description="name of the table")
+    columns: list[str]=Field(description="list of all columns which is important respective to the question")
+    noun_columns: list[str]=Field(description="it contain only the columns that are relevant to the question and contain nouns or names")
+class parse_question_stuct(BaseModel):
+    is_relevant:bool=Field(description="it is set to False if question is not related to the database or if the question has no enough information")
+    relevant_tables:list[parse_question_stuct_inner]=Field(description="if is_relevant is set to be true then fill this with table information relavant to the question")
+class validate_sql_struct(BaseModel):
+    valid: bool=Field(description="set it to be True if generted sql query is valid otherwise set it to be False")
+    issues:Optional[str]=Field(description="if there is error/issues in generated sql query then highlight the issues and error")
+    corrected_query: str=Field(description="it there is issues in the generated sql query then provide the correct sql query")
+############
+
+#node-1
+def parse_question(state: dict) -> dict:
+    """Parse user question and identify relevant tables and columns."""
+    question = state['question']
+    schema = get_schema()
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", '''You are a data analyst that can help summarize SQL tables and parse user questions about a database. 
+Given the question and database schema, identify the relevant tables and columns. 
+If the question is not relevant to the database or if there is not enough information to answer the question, set is_relevant to false.
+The "noun_columns" field should contain only the columns that are relevant to the question and contain nouns or names, for example, the column "Artist name" contains nouns relevant to the question "What are the top selling artists?", but the column "Artist ID" is not relevant because it does not contain a noun. Do not include columns that contain numbers.
+'''),
+        ("human", "===Database schema:\n{schema}\n\n===User question:\n{question}\n\nIdentify relevant tables and columns:")
+    ])
+
+    
+    response = llm.with_structured_output(parse_question_stuct).invoke(prompt.format_messages(schema=schema, question=question))
+    return {"parsed_question":response}
+
+#node-2
+def get_unique_nouns(state: dict) -> dict:
+    """Find unique nouns in relevant tables and columns."""
+    parsed_question = state['parsed_question']
+    
+    if not parsed_question.is_relevant:
+        return {"unique_nouns": []}
+
+    unique_nouns = set()
+    for table_info in parsed_question.relevant_tables:
+        table_name = table_info.table_name
+        noun_columns = table_info.noun_columns
+        
+        if noun_columns:
+            column_names = ', '.join(f"{col}" for col in noun_columns)
+            query = f"SELECT DISTINCT {column_names} FROM {table_name}"
+            results = execute_query(query)
+            for row in results:
+                unique_nouns.update(str(value) for value in row if value)
+
+    return {"unique_nouns": list(unique_nouns)}
+#node-3
+def generate_sql(state: dict) -> dict:
+    """Generate SQL query based on parsed question and unique nouns."""
+    question = state['question']
+    parsed_question = state['parsed_question'].model_dump()
+    unique_nouns = state['unique_nouns']
+
+    if not parsed_question['is_relevant']:
+        return {"sql_query": "NOT_RELEVANT", "is_relevant": False}
+    
+    schema = get_schema()
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", '''
+You are an AI assistant that generates SQL queries based on user questions, database schema, and unique nouns found in the relevant tables. Generate a valid SQL query to answer the user's question.
+
+If there is not enough information to write a SQL query, respond with "NOT_ENOUGH_INFO".
+
+Here are some examples:
+
+1. What is the top selling product?
+Answer: SELECT product_name, SUM(quantity) as total_quantity FROM sales WHERE product_name IS NOT NULL AND quantity IS NOT NULL AND product_name != "" AND quantity != "" AND product_name != "N/A" AND quantity != "N/A" GROUP BY product_name ORDER BY total_quantity DESC LIMIT 1
+
+2. What is the total revenue for each product?
+Answer: SELECT \product name\, SUM(quantity * price) as total_revenue FROM sales WHERE \product name\ IS NOT NULL AND quantity IS NOT NULL AND price IS NOT NULL AND \product name\ != "" AND quantity != "" AND price != "" AND \product name\ != "N/A" AND quantity != "N/A" AND price != "N/A" GROUP BY \product name\  ORDER BY total_revenue DESC
+
+3. What is the market share of each product?
+Answer: SELECT \product name\, SUM(quantity) * 100.0 / (SELECT SUM(quantity) FROM sa  les) as market_share FROM sales WHERE \product name\ IS NOT NULL AND quantity IS NOT NULL AND \product name\ != "" AND quantity != "" AND \product name\ != "N/A" AND quantity != "N/A" GROUP BY \product name\  ORDER BY market_share DESC
+
+4. Plot the distribution of income over time
+Answer: SELECT income, COUNT(*) as count FROM users WHERE income IS NOT NULL AND income != "" AND income != "N/A" GROUP BY income
+
+THE RESULTS SHOULD ONLY BE IN THE FOLLOWING FORMAT, SO MAKE SURE TO ONLY GIVE TWO OR THREE COLUMNS:
+[[x, y]]
+or 
+[[label, x, y]]
+             
+For questions like "plot a distribution of the fares for men and women", count the frequency of each fare and plot it. The x axis should be the fare and the y axis should be the count of people who paid that fare.
+SKIP ALL ROWS WHERE ANY COLUMN IS NULL or "N/A" or "".
+Just give the query string. Do not format it. Make sure to use the correct spellings of nouns as provided in the unique nouns list. All the table and column names should be enclosed in backticks.
+'''),
+        ("human", '''===Database schema:
+{schema}
+
+===User question:
+{question}
+
+===Relevant tables and columns:
+{parsed_question}
+
+===Unique nouns in relevant tables:
+{unique_nouns}
+
+Generate SQL query string'''),
+    ])
+
+    response = llm.invoke(prompt.format_messages(schema=schema, question=question, parsed_question=parsed_question, unique_nouns=unique_nouns)).content
+    
+    if response.strip() == "NOT_ENOUGH_INFO":
+        return {"sql_query": "NOT_RELEVANT"}
+    else:
+        return {"sql_query": response}
+#node-4
+def validate_and_fix_sql(state: dict) -> dict:
+    """Validate and fix the generated SQL query."""
+    sql_query = state['sql_query']
+
+    if sql_query == "NOT_RELEVANT":
+        return {"sql_query": "NOT_RELEVANT", "sql_valid": False}
+    
+    schema = get_schema()
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", r'''
+You are an AI assistant that validates and fixes SQL queries. Your task is to:
+1. Check if the SQL query is valid.
+2. Ensure all table and column names are correctly spelled and exist in the schema. All the table and column names should be enclosed in backticks.
+3. If there are any issues, fix them and provide the corrected SQL query.
+4. If no issues are found, return the original query.
+'''),
+        ("human", r"""===Database schema:
+{schema}
+
+===Generated SQL query:
+{sql_query}
+
+For example:
+1. {{
+    "valid": true,
+    "issues": null,
+    "corrected_query": "None"
+}}
+             
+2. {{
+    "valid": false,
+    "issues": "Column USERS does not exist",
+    "corrected_query": "SELECT * FROM \users\ WHERE age > 25"
+}}
+
+3. {{
+    "valid": false,
+    "issues": "Column names and table names should be enclosed in backticks if they contain spaces or special characters",
+    "corrected_query": "SELECT * FROM \gross income\ WHERE \age\ > 25"
+}}
+             
+""")
+    ])
+
+    response = llm.with_structured_output(validate_sql_struct).invoke(prompt.format_messages(schema=schema, sql_query=sql_query))
+    result=response.model_dump()
+    if result["valid"] and result["issues"] is None:
+        return {"sql_query": sql_query, "sql_valid": True}
+    else:
+        return {
+            "sql_query": result["corrected_query"],
+            "sql_valid": result["valid"],
+            "sql_issues": result["issues"]
+        }
+# node-5
+def execute_sql(state: dict) -> dict:
+    """Execute SQL query and return results."""
+    query = state['sql_query']
+    
+    if query == "NOT_RELEVANT":
+        return {"results": "NOT_RELEVANT"}
+
+    try:
+        results = execute_query(query)
+        return {"results": results}
+    except Exception as e:
+        return {"error": str(e)}
+#node-6
+def format_results(state: dict) -> dict:
+    """Format query results into a human-readable response."""
+    question = state['question']
+    results = state['results']
+
+    if results == "NOT_RELEVANT":
+        return {"answer": "Sorry, I can only give answers relevant to the database."}
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are an AI assistant that formats database query results into a human-readable response. Give a conclusion to the user's question based on the query results. Do not give the answer in markdown format. Only give the answer in one line."),
+        ("human", "User question: {question}\n\nQuery results: {results}\n\nFormatted response:"),
+    ])
+
+    response = llm.invoke(prompt.format_messages(question=question, results=results)).content
+    return {"answer": response}
+# node-7
+def choose_visualization(state: dict) -> dict:
+    """Choose an appropriate visualization for the data."""
+    question = state['question']
+    results = state['results']
+    sql_query = state['sql_query']
+
+    if results == "NOT_RELEVANT":
+        return {"visualization": "none", "visualization_reasoning": "No visualization needed for irrelevant questions."}
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", '''
+You are an AI assistant that recommends appropriate data visualizations. Based on the user's question, SQL query, and query results, suggest the most suitable type of graph or chart to visualize the data. If no visualization is appropriate, indicate that.
+
+Available chart types and their use cases:
+- Bar Graphs: Best for comparing categorical data or showing changes over time when categories are discrete and the number of categories is more than 2. Use for questions like "What are the sales figures for each product?" or "How does the population of cities compare? or "What percentage of each city is male?"
+- Horizontal Bar Graphs: Best for comparing categorical data or showing changes over time when the number of categories is small or the disparity between categories is large. Use for questions like "Show the revenue of A and B?" or "How does the population of 2 cities compare?" or "How many men and women got promoted?" or "What percentage of men and what percentage of women got promoted?" when the disparity between categories is large.
+- Scatter Plots: Useful for identifying relationships or correlations between two numerical variables or plotting distributions of data. Best used when both x axis and y axis are continuous. Use for questions like "Plot a distribution of the fares (where the x axis is the fare and the y axis is the count of people who paid that fare)" or "Is there a relationship between advertising spend and sales?" or "How do height and weight correlate in the dataset? Do not use it for questions that do not have a continuous x axis."
+- Pie Charts: Ideal for showing proportions or percentages within a whole. Use for questions like "What is the market share distribution among different companies?" or "What percentage of the total revenue comes from each product?"
+- Line Graphs: Best for showing trends and distributionsover time. Best used when both x axis and y axis are continuous. Used for questions like "How have website visits changed over the year?" or "What is the trend in temperature over the past decade?". Do not use it for questions that do not have a continuous x axis or a time based x axis.
+
+Consider these types of questions when recommending a visualization:
+1. Aggregations and Summarizations (e.g., "What is the average revenue by month?" - Line Graph)
+2. Comparisons (e.g., "Compare the sales figures of Product A and Product B over the last year." - Line or Column Graph)
+3. Plotting Distributions (e.g., "Plot a distribution of the age of users" - Scatter Plot)
+4. Trends Over Time (e.g., "What is the trend in the number of active users over the past year?" - Line Graph)
+5. Proportions (e.g., "What is the market share of the products?" - Pie Chart)
+6. Correlations (e.g., "Is there a correlation between marketing spend and revenue?" - Scatter Plot)
+
+Provide your response in the following format:
+Recommended Visualization: [Chart type or "None"]. ONLY use the following names: bar, horizontal_bar, line, pie, scatter, none
+Reason: [Brief explanation for your recommendation]
+'''),
+        ("human", '''
+User question: {question}
+SQL query: {sql_query}
+Query results: {results}
+
+Recommend a visualization:'''),
+    ])
+
+    response = llm.invoke(prompt.format_messages(question=question, sql_query=sql_query, results=results)).content
+    
+    lines = response.split('\n')
+    visualization = lines[0].split(': ')[1]
+    reason = lines[1].split(': ')[1]
+    return {"visualization": visualization, "visualization_reason": reason}
+#node-8
+def format_data_for_visualization(state: dict) -> dict:
+    """Format the data for the chosen visualization type."""
+    visualization = state['visualization']
+    results = state['results']
+    question = state['question']
+    sql_query = state['sql_query']
+
+    if visualization == "none":
+        return {"formatted_data_for_visualization": None}
+    
+    if visualization == "scatter":
+        try:
+            return _format_scatter_data(results)
+        except Exception as e:
+            return _format_other_visualizations(visualization, question, sql_query, results)
+    
+    if visualization == "bar" or visualization == "horizontal_bar":
+        try:
+            return _format_bar_data(results, question)
+        except Exception as e:
+            return _format_other_visualizations(visualization, question, sql_query, results)
+    
+    if visualization == "line":
+        try:
+            return _format_line_data(results, question)
+        except Exception as e:
+            return _format_other_visualizations(visualization, question, sql_query, results)
+    
+    return _format_other_visualizations(visualization, question, sql_query, results)
+def create_workflow():
+    """Create and configure the workflow graph."""
+    workflow = StateGraph(State)
+    # Add nodes to the graph
+    workflow.add_node("parse_question", parse_question)
+    workflow.add_node("get_unique_nouns", get_unique_nouns)
+    workflow.add_node("generate_sql", generate_sql)
+    workflow.add_node("validate_and_fix_sql", validate_and_fix_sql)
+    workflow.add_node("execute_sql", execute_sql)
+    workflow.add_node("format_results", format_results)
+    workflow.add_node("choose_visualization", choose_visualization)
+    workflow.add_node("format_data_for_visualization", format_data_for_visualization)
+
+    # Define edges
+    workflow.add_edge(START,"parse_question")
+    workflow.add_edge("parse_question", "get_unique_nouns")
+    workflow.add_edge("get_unique_nouns", "generate_sql")
+    workflow.add_edge("generate_sql", "validate_and_fix_sql")
+    workflow.add_edge("validate_and_fix_sql", "execute_sql")
+    workflow.add_edge("execute_sql", "format_results")
+    workflow.add_edge("execute_sql", "choose_visualization")
+    workflow.add_edge("choose_visualization", "format_data_for_visualization")
+    workflow.add_edge("format_data_for_visualization", END)
+    workflow.add_edge("format_results", END)
+    return workflow.compile()
+
