@@ -9,7 +9,7 @@ if 'sold_result' not in st.session_state:
 mydb,dbcursor=connection()
 def fetch_vehicle(vehicle_no):
     try:
-        query = "SELECT image,vehicle_no,model,cc,purchase_date,cost_price,fine FROM vehicle WHERE vehicle_no = %s"
+        query = "SELECT image,vehicle_no,model_name,cc,purchase_date,cost_price,fine,model_year FROM vehicle WHERE vehicle_no = %s"
         dbcursor.execute(query, (vehicle_no,))
         result = dbcursor.fetchone()
         if result:
@@ -61,7 +61,8 @@ if result:
                 col=st.columns(3)
                 with col[0]:
                     st.image(image_path,use_container_width=True)
-        st.text_input(placeholder="R15",label="Model",value=result[2],disabled=True)
+        st.text_input(placeholder="R15",label="Vehicle Name",value=result[2],disabled=True)
+        st.number_input(placeholder="2012",label="Model",value=result[7],disabled=True)
         st.number_input(placeholder="150",label="CC",value=result[3],disabled=True)
         st.date_input(label="Purchasing Date",value=result[4],disabled=True)
         st.number_input(placeholder="80000",label="Cost Price",value=result[5],disabled=True)

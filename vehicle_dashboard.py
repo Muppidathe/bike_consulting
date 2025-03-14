@@ -30,25 +30,7 @@ cost_price_query = f"select IFNULL(cost_price+fine+sum(amount),0) from vehicle v
 balance_query = f"select sum(sales_price-received_amount) from vehicle where sales_date>='{inp_date}' and sales_date<='{inp_end_date}'"
 sales_price_query = f"select ifnull(sum(received_amount),0) from vehicle where sales_date>='{inp_date}' and sales_date<='{inp_end_date}'"
 #chatgpt query
-profit_query=f"""SELECT SUM(profits) 
-FROM (
-    SELECT 
-        received_amount - cost_price + fine + IFNULL(expenses, 0) AS profits
-    FROM (
-        SELECT 
-            v.vehicle_no,
-            v.received_amount,
-            v.cost_price,
-            v.fine,
-            IFNULL(SUM(ve.amount), 0) AS expenses
-        FROM vehicle v
-        LEFT JOIN vehicle_expenses ve ON v.vehicle_no = ve.vehicle_num
-        WHERE v.sales_date >= '{inp_date}' 
-          AND v.sales_date <= '{inp_end_date}' 
-          AND IFNULL(v.received_amount, 0) <> 0
-        GROUP BY v.vehicle_no, v.received_amount, v.cost_price, v.fine
-    ) AS subquery
-) AS final_query;"""
+profit_query=f"select if(ifnull(received_amount,0)=0,0,received_amount-(cost_price+fine+ifnull(sum(amount),0))) as 'profit' from vehicle v left join vehicle_expenses e on vehicle_no=vehicle_num where sales_date>='{inp_date}' and sales_date<='{inp_end_date}' group by vehicle_num"
 
 # Execute queries and get results
 dbcursor.execute(cost_price_query)
@@ -73,11 +55,12 @@ else:
     sales_price = 0
 #__________________-
 dbcursor.execute(profit_query)
-res = dbcursor.fetchone()
-if res[0]:
-    profit = res[0]
-else:
-    profit= 0
+res = dbcursor.fetchall()
+profit= 0
+if res:
+    for i in res:
+        profit += i[0]
+
 # CSS for responsive cards
 st.markdown("""
 <style>
@@ -143,7 +126,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Table display
-dataframe_query = f"select vehicle_no,image,model,purchase_date,cost_price+fine+ifnull(sum(amount),0) as 'total cost price',sales_price,received_amount,sales_price-received_amount as 'balance',if(ifnull(received_amount,0)=0,0,received_amount-cost_price+fine+ifnull(sum(amount),0)) as 'profit' from vehicle v left join vehicle_expenses ve on v.vehicle_no=ve.vehicle_num where purchase_date >= '{inp_date}' and purchase_date <= '{inp_end_date}' group by vehicle_no"
+dataframe_query = f"select vehicle_no,image,model_name,model_year,purchase_date,cost_price+fine+ifnull(sum(amount),0) as 'total cost price',sales_price,received_amount,sales_price-received_amount as 'balance',if(ifnull(received_amount,0)=0,0,received_amount-(cost_price+fine+ifnull(sum(amount),0))) as 'profit' from vehicle v left join vehicle_expenses ve on v.vehicle_no=ve.vehicle_num where purchase_date >= '{inp_date}' and purchase_date <= '{inp_end_date}' group by vehicle_no"
 
 df = pd.read_sql(dataframe_query, mydb)
 df.index = df.index + 1

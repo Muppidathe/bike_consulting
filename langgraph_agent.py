@@ -1,13 +1,15 @@
-from typing import List, Any, Annotated, Dict, Optional
+#langgraph_agent.py
+from typing import List, Any, Annotated, Dict
 from typing_extensions import TypedDict
 import operator
 import json
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from langgraph.graph import StateGraph, END,START
-from pydantic import BaseModel,Field
 import mysql.connector
 from mysql.connector import Error
+from langchain_core.output_parsers import JsonOutputParser
+import re
 ####################### start of dependency ############
 def connect():
     try:
@@ -75,299 +77,217 @@ def execute_query( query: str) -> List[Any]:
     except mysql.connector.Error as e:
         raise Exception(f"Error executing query: {str(e)}")
 #node-8 dependency
-def _format_line_data(results, question):
-    if isinstance(results, str):
-        results = eval(results)
-
-    if len(results[0]) == 2:
-        x_values = [str(row[0]) for row in results]
-        y_values = [float(row[1]) for row in results]
-
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are a data labeling expert. Given a question and some data, provide a concise and relevant label for the data series."),
-            ("human", "Question: {question}\n Data (first few rows): {data}\n\nProvide a concise label for this y axis. For example, if the data is the sales figures over time, the label could be 'Sales'. If the data is the population growth, the label could be 'Population'. If the data is the revenue trend, the label could be 'Revenue'."),
-        ])
-        label = llm.invoke(prompt.format_messages(question=question, data=str(results[:2]))).content
-
-        formatted_data = {
-            "xValues": x_values,
-            "yValues": [
-                {
-                    "data": y_values,
-                    "label": label.strip()
-                }
-            ]
-        }
-    elif len(results[0]) == 3:
-        data_by_label = {}
-        x_values = []
-        labels = list(set(item2 for item1, item2, item3 in results 
-                          if isinstance(item2, str) and not item2.replace(".", "").isdigit() and "/" not in item2))
-        
-        if not labels:
-            labels = list(set(item1 for item1, item2, item3 in results 
-                          if isinstance(item1, str) and not item1.replace(".", "").isdigit() and "/" not in item1))
-
-        for item1, item2, item3 in results:
-            if isinstance(item1, str) and not item1.replace(".", "").isdigit() and "/" not in item1:
-                label, x, y = item1, item2, item3
-            else:
-                x, label, y = item1, item2, item3
-                
-            if str(x) not in x_values:
-                x_values.append(str(x))
-            if label not in data_by_label:
-                data_by_label[label] = []
-            data_by_label[label].append(float(y))
-            for other_label in labels:
-                if other_label != label:
-                    if other_label not in data_by_label:
-                        data_by_label[other_label] = []
-                    data_by_label[other_label].append(None)
-
-        y_values = [
-            {
-                "data": data,
-                "label": label
-            }
-            for label, data in data_by_label.items()
-        ]
-
-        formatted_data = {
-            "xValues": x_values,
-            "yValues": y_values,
-            "yAxisLabel": ""
-        }
-
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are a data labeling expert. Given a question and some data, provide a concise and relevant label for the y-axis."),
-            ("human", "Question: {question}\n Data (first few rows): {data}\n\nProvide a concise label for the y-axis. For example, if the data represents sales figures over time for different categories, the label could be 'Sales'. If it's about population growth for different groups, it could be 'Population'."),
-        ])
-        y_axis_label = llm.invoke(prompt.format_messages(question=question, data=str(results[:2]))).content
-
-        formatted_data["yAxisLabel"] = y_axis_label.strip()
-
-    return {"formatted_data_for_visualization": formatted_data}
-
-def _format_scatter_data(results):
-    if isinstance(results, str):
-        results = eval(results)
-
-    formatted_data = {"series": []}
-    
-    if len(results[0]) == 2:
-        formatted_data["series"].append({
-            "data": [
-                {"x": float(x), "y": float(y), "id": i+1}
-                for i, (x, y) in enumerate(results)
-            ],
-            "label": "Data Points"
-        })
-    elif len(results[0]) == 3:
-        entities = {}
-        for item1, item2, item3 in results:
-            if isinstance(item1, str) and not item1.replace(".", "").isdigit() and "/" not in item1:
-                label, x, y = item1, item2, item3
-            else:
-                x, label, y = item1, item2, item3
-            if label not in entities:
-                entities[label] = []
-            entities[label].append({"x": float(x), "y": float(y), "id": len(entities[label])+1})
-        
-        for label, data in entities.items():
-            formatted_data["series"].append({
-                "data": data,
-                "label": label
-            })
-    else:
-        raise ValueError("Unexpected data format in results")                
-
-    return {"formatted_data_for_visualization": formatted_data}
-
-def _format_bar_data(results, question):
-    if isinstance(results, str):
-        results = eval(results)
-
-    if len(results[0]) == 2:
-        labels = [str(row[0]) for row in results]
-        data = [float(row[1]) for row in results]
-        
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are a data labeling expert. Given a question and some data, provide a concise and relevant label for the data series."),
-            ("human", "Question: {question}\nData (first few rows): {data}\n\nProvide a concise label for this y axis. For example, if the data is the sales figures for products, the label could be 'Sales'. If the data is the population of cities, the label could be 'Population'. If the data is the revenue by region, the label could be 'Revenue'."),
-        ])
-        label = llm.invoke(prompt.format_messages(question=question, data=str(results[:2]))).content
-        
-        values = [{"data": data, "label": label}]
-    elif len(results[0]) == 3:
-        categories = set(row[1] for row in results)
-        labels = list(categories)
-        entities = set(row[0] for row in results)
-        values = []
-        for entity in entities:
-            entity_data = [float(row[2]) for row in results if row[0] == entity]
-            values.append({"data": entity_data, "label": str(entity)})
-    else:
-        raise ValueError("Unexpected data format in results")
-
-    formatted_data = {
-        "labels": labels,
-        "values": values
-    }
-
-    return {"formatted_data_for_visualization": formatted_data}
-
-def _format_other_visualizations(visualization, question, sql_query, results):
-    instructions = graph_instructions[visualization]
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a Data expert who formats data according to the required needs. You are given the question asked by the user, it's sql query, the result of the query and the format you need to format it in."),
-        ("human", 'For the given question: {question}\n\nSQL query: {sql_query}\n\Result: {results}\n\nUse the following example to structure the data: {instructions}. Just give the json string. Do not format it'),
-    ])
-    response = llm.invoke(prompt.format_messages(question=question, sql_query=sql_query, results=results, instructions=instructions)).content
-    
-    try:
-        formatted_data_for_visualization = json.loads(response)
-        return {"formatted_data_for_visualization": formatted_data_for_visualization}
-    except json.JSONDecodeError:
-        return {"error": "Failed to format data for visualization", "raw_response": response}
-# Graph Instructions
 barGraphIntstruction = '''
-  Where data is: {
-    labels: string[]
-    values: {\data: number[], label: string}[]
-  }
-
-// Examples of usage:
-Each label represents a column on the x axis.
-Each array in values represents a different entity. 
-
-Here we are looking at average income for each month.
-1. data = {
-  labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-  values: [{data:[21.5, 25.0, 47.5, 64.8, 105.5, 133.2], label: 'Income'}],
+Where data is: {
+  labels: string[]
+  values: {data: number[], label: string}[]
 }
 
-Here we are looking at the performance of american and european players for each series. Since there are two entities, we have two arrays in values.
-2. data = {
-  labels: ['series A', 'series B', 'series C'],
-  values: [{data:[10, 15, 20], label: 'American'}, {data:[20, 25, 30], label: 'European'}],
+DETAILED INSTRUCTIONS FOR YOUR DATABASE:
+- For vehicle sales data: Use labels for different model names and values for cost or sales prices
+- For bills data: Use labels for person names and values for transaction amounts
+- For expenses data: Use labels for different expense descriptions and values for amounts spent
+
+EXAMPLES SPECIFIC TO YOUR DATABASE:
+
+Example 1 - Vehicle Sales by Model:
+data = {
+  labels: ['R15', 'TVS', 'Pulsar', 'Activa', 'FZ'],
+  values: [{data:[146000, 40000, 120000, 85000, 110000], label: 'Cost Price'}],
 }
+
+Example 2 - Money Given vs Received by Person:
+data = {
+  labels: ['MUPPIDATHI', 'BALA', 'KANNAN'],
+  values: [
+    {data:[15000, 12000, 8000], label: 'Money Given'}, 
+    {data:[5000, 3000, 2000], label: 'Money Received'}
+  ],
+}
+
+Example 3 - Office Expenses by Category:
+data = {
+  labels: ['PATHI', 'PEN', 'STATIONARY', 'CLEANING'],
+  values: [{data:[56, 30, 120, 45], label: 'Amount'}],
+}
+
+Ensure the number of elements in 'labels' matches the number of elements in each 'data' array.
 '''
 
 horizontalBarGraphIntstruction = '''
-  Where data is: {
-    labels: string[]
-    values: {\data: number[], label: string}[]
-  }
-
-// Examples of usage:
-Each label represents a column on the x axis.
-Each array in values represents a different entity. 
-
-Here we are looking at average income for each month.
-1. data = {
-  labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-  values: [{data:[21.5, 25.0, 47.5, 64.8, 105.5, 133.2], label: 'Income'}],
+Where data is: {
+  labels: string[]
+  values: {data: number[], label: string}[]
 }
 
-Here we are looking at the performance of american and european players for each series. Since there are two entities, we have two arrays in values.
-2. data = {
-  labels: ['series A', 'series B', 'series C'],
-  values: [{data:[10, 15, 20], label: 'American'}, {data:[20, 25, 30], label: 'European'}],
+DETAILED INSTRUCTIONS FOR YOUR DATABASE:
+- Best for comparing a small number of categories (like comparing just 2-3 people's transactions)
+- Use when you have long category names like expense descriptions
+- Perfect for vehicle comparison where only a few vehicles are being analyzed
+
+EXAMPLES SPECIFIC TO YOUR DATABASE:
+
+Example 1 - Money Given vs Received for a Single Person:
+data = {
+  labels: ['Money Given', 'Money Received'],
+  values: [{data:[15000, 5000], label: 'MUPPIDATHI'}],
 }
 
+Example 2 - Profit Comparison Between Vehicles:
+data = {
+  labels: ['KL31N7871', 'TN31N7871'],
+  values: [{data:[4000, 2000], label: 'Profit Margin'}],
+}
+
+Example 3 - Transaction Amounts by Person:
+data = {
+  labels: ['MUPPIDATHI', 'BALA'],
+  values: [{data:[10000, 12000], label: 'Outstanding Amount'}],
+}
+
+Make sure labels are clear and descriptive, especially for vehicle numbers or expense categories.
 '''
 
 lineGraphIntstruction = '''
-  Where data is: {
+Where data is: {
   xValues: number[] | string[]
-  yValues: { data: number[]; label: string }[]
+  yValues: {data: number[], label: string}[]
 }
 
-// Examples of usage:
+DETAILED INSTRUCTIONS FOR YOUR DATABASE:
+- Perfect for showing trends over dates in your tables
+- Use for tracking expenses, bills, or vehicle sales over time
+- Can show multiple trends simultaneously (e.g., money given vs received over time)
 
-Here we are looking at the momentum of a body as a function of mass.
-1. data = {
-  xValues: ['2020', '2021', '2022', '2023', '2024'],
+EXAMPLES SPECIFIC TO YOUR DATABASE:
+
+Example 1 - Expenses Over Time:
+data = {
+  xValues: ['2025-03-01', '2025-03-02', '2025-03-03', '2025-03-04'],
   yValues: [
-    { data: [2, 5.5, 2, 8.5, 1.5]},
+    {data: [25, 40, 15, 86], label: 'Office Expenses'},
+    {data: [100, 250, 300, 500], label: 'Vehicle Expenses'}
   ],
 }
 
-Here we are looking at the performance of american and european players for each year. Since there are two entities, we have two arrays in yValues.
-2. data = {
-  xValues: ['2020', '2021', '2022', '2023', '2024'],
+Example 2 - Transaction History for a Person:
+data = {
+  xValues: ['Jan', 'Feb', 'Mar', 'Apr'],
   yValues: [
-    { data: [2, 5.5, 2, 8.5, 1.5], label: 'American' },
-    { data: [2, 5.5, 2, 8.5, 1.5], label: 'European' },
+    {data: [5000, 7000, 15000, 8000], label: 'Money Given to MUPPIDATHI'},
+    {data: [1000, 2000, 5000, 3000], label: 'Money Received from MUPPIDATHI'}
   ],
 }
+
+Example 3 - Vehicle Value Trends:
+data = {
+  xValues: ['Purchase', 'After Repair', 'At Sale'],
+  yValues: [
+    {data: [146000, 147500, 150000], label: 'R15 Value'}
+  ],
+}
+
+Ensure xValues represent time periods or sequential stages, and the data points in yValues correspond exactly to these x-axis points.
 '''
 
 pieChartIntstruction = '''
-  Where data is: {
-    labels: string
-    values: number
-  }[]
+Where data is: [
+  {id: number, value: number, label: string}
+]
 
-// Example usage:
- data = [
-        { id: 0, value: 10, label: 'series A' },
-        { id: 1, value: 15, label: 'series B' },
-        { id: 2, value: 20, label: 'series C' },
-      ],
+DETAILED INSTRUCTIONS FOR YOUR DATABASE:
+- Ideal for showing proportions within your data
+- Use for expense breakdowns, money distribution among people, or vehicle cost distributions
+- Best when you have 2-7 categories to compare
+
+EXAMPLES SPECIFIC TO YOUR DATABASE:
+
+Example 1 - Distribution of Outstanding Money:
+data = [
+  {id: 0, value: 10000, label: 'MUPPIDATHI'},
+  {id: 1, value: 12000, label: 'BALA'},
+  {id: 2, value: 5000, label: 'KANNAN'}
+]
+
+Example 2 - Office Expense Breakdown:
+data = [
+  {id: 0, value: 56, label: 'PATHI'},
+  {id: 1, value: 30, label: 'PEN'},
+  {id: 2, value: 150, label: 'FURNITURE'}
+]
+
+Example 3 - Vehicle Cost Distribution:
+data = [
+  {id: 0, value: 146000, label: 'Base Cost'},
+  {id: 1, value: 1000, label: 'Fine'},
+  {id: 2, value: 500, label: 'Repairs'}
+]
+
+Always assign unique ID values, make sure values are numbers, and ensure labels are descriptive.
 '''
 
 scatterPlotIntstruction = '''
 Where data is: {
-  series: {
-    data: { x: number; y: number; id: number }[]
+  series: [{
+    data: [{x: number, y: number, id: number}],
     label: string
-  }[]
+  }]
 }
 
-// Examples of usage:
-1. Here each data array represents the points for a different entity. 
-We are looking for correlation between amount spent and quantity bought for men and women.
+DETAILED INSTRUCTIONS FOR YOUR DATABASE:
+- Use for showing relationships between two numeric variables
+- Good for analyzing vehicle value vs age, cost price vs sales price, or transaction amounts vs dates
+- Can show multiple data series to compare different categories
+
+EXAMPLES SPECIFIC TO YOUR DATABASE:
+
+Example 1 - Vehicle Cost vs Year:
 data = {
-  series: [
-    {
-      data: [
-        { x: 100, y: 200, id: 1 },
-        { x: 120, y: 100, id: 2 },
-        { x: 170, y: 300, id: 3 },
-      ],
-      label: 'Men',
-    },
-    {
-      data: [
-        { x: 300, y: 300, id: 1 },
-        { x: 400, y: 500, id: 2 },
-        { x: 200, y: 700, id: 3 },
-      ],
-      label: 'Women',
-    }
-  ],
+  series: [{
+    data: [
+      {x: 2016, y: 40000, id: 1},
+      {x: 2018, y: 75000, id: 2},
+      {x: 2020, y: 100000, id: 3},
+      {x: 2022, y: 146000, id: 4}
+    ],
+    label: 'Vehicles'
+  }]
 }
 
-2. Here we are looking for correlation between the height and weight of players.
+Example 2 - Transaction Amount vs Date:
 data = {
-  series: [
-    {
-      data: [
-        { x: 180, y: 80, id: 1 },
-        { x: 170, y: 70, id: 2 },
-        { x: 160, y: 60, id: 3 },
-      ],
-      label: 'Players',
-    },
-  ],
+  series: [{
+    data: [
+      {x: 1, y: 15000, id: 1},  // March 1, 2025
+      {x: 2, y: 8000, id: 2},   // March 2, 2025
+      {x: 3, y: 12000, id: 3},  // March 3, 2025
+      {x: 4, y: 5000, id: 4}    // March 4, 2025
+    ],
+    label: 'Money Given'
+  }, {
+    data: [
+      {x: 1, y: 2000, id: 5},   // March 1, 2025
+      {x: 2, y: 3000, id: 6},   // March 2, 2025
+      {x: 3, y: 1000, id: 7},   // March 3, 2025
+      {x: 4, y: 5000, id: 8}    // March 4, 2025
+    ],
+    label: 'Money Received'
+  }]
 }
 
-// Note: Each object in the 'data' array represents a point on the scatter plot.
-// The 'x' and 'y' values determine the position of the point, and 'id' is a unique identifier.
-// Multiple series can be represented, each as an object in the outer array.
-'''    
+Example 3 - Cost Price vs Sales Price:
+data = {
+  series: [{
+    data: [
+      {x: 40000, y: 45000, id: 1},  // TVS
+      {x: 146000, y: 150000, id: 2} // R15
+    ],
+    label: 'Vehicles'
+  }]
+}
+
+Make sure each data point has a unique ID, and x and y values represent numeric measurements that could have a meaningful relationship.
+'''
 graph_instructions = {
     "bar": barGraphIntstruction,
     "horizontal_bar": horizontalBarGraphIntstruction,
@@ -375,10 +295,65 @@ graph_instructions = {
     "pie": pieChartIntstruction,
     "scatter": scatterPlotIntstruction
 }
+def _format_other_visualizations(visualization, question, sql_query, results):
+    instructions = graph_instructions[visualization]
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", '''You are a financial data visualization expert specialized in vehicle sales and bill tracking systems.
 
-###############end of dependecy###############################################
+Your job is to convert SQL query results into precisely formatted JSON for creating charts. You must follow the exact structure provided in the template.
 
-llm = ChatGroq(model="llama-3.3-70b-specdec",api_key="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")
+SPECIFIC GUIDELINES FOR THIS DATABASE:
+1. For bills/transactions data:
+   - Consider whether to group by person name or date
+   - Distinguish between money given (positive) and received (negative)
+   - Calculate net balances when appropriate
+
+2. For vehicle data:
+   - Compare cost price vs. sales price for profitability analysis
+   - Highlight vehicles with pending payments (received_amount < sales_price)
+   - Group by model_name when comparing vehicle types
+
+3. For expense data:
+   - Categories expenses logically by description
+   - Group small amounts into "Other" if there are many small categories
+   - Sort expense categories by amount for better visualization
+
+Use the exact field names and data structures shown in the template. Triple-check that your JSON is valid and matches the expected format. Your response should be ONLY the correctly formatted JSON with no additional text.
+'''),
+        ("human", '''USER QUESTION: 
+{question}
+
+SQL QUERY:
+{sql_query}
+
+QUERY RESULTS (tuples):
+{results}
+
+FORMAT TEMPLATE:
+{instructions}
+
+Convert the results to the exact format shown in the template:'''),
+    ])
+    response = llm.invoke(prompt.format_messages(question=question, sql_query=sql_query, results=results, instructions=instructions)).content
+    
+    try:
+        # Try to extract just the JSON part if there's any explanation text
+        json_str= re.sub(r'<think>.*?</think>','', response)
+        formatted_data_for_visualization = json.loads(json_str)
+        return {"formatted_data_for_visualization": formatted_data_for_visualization}
+    except json.JSONDecodeError:
+        # Second attempt - try to find anything that looks like JSON
+        try:
+            json_pattern = r'({[\s\S]*}|\[[\s\S]*\])'
+            match = re.search(json_pattern, response)
+            if match:
+                json_str = match.group(0)
+                formatted_data_for_visualization = json.loads(json_str)
+                return {"formatted_data_for_visualization": formatted_data_for_visualization}
+        except:
+            pass
+            
+        return {"error": "Failed to format data for visualization", "raw_response": response}###############end of dependecy###############################################
 # Define TypedDicts
 class State(TypedDict):
     question: str
@@ -386,25 +361,25 @@ class State(TypedDict):
     unique_nouns: List[str]
     sql_query: str
     results: List[Any]
-    visualization: Annotated[str, operator.add]
+    visualization: str
     sql_valid: bool
     sql_issues: str
     answer: Annotated[str, operator.add]
     error: str
-    visualization_reason: Annotated[str, operator.add]
+    visualization_reason: str
     formatted_data_for_visualization: Dict[str, Any]
     is_relevant:bool
-class parse_question_stuct_inner(BaseModel):
-    table_name: str=Field(description="name of the table")
-    columns: list[str]=Field(description="list of all columns which is important respective to the question")
-    noun_columns: list[str]=Field(description="it contain only the columns that are relevant to the question and contain nouns or names")
-class parse_question_stuct(BaseModel):
-    is_relevant:bool=Field(description="it is set to False if question is not related to the database or if the question has no enough information")
-    relevant_tables:list[parse_question_stuct_inner]=Field(description="if is_relevant is set to be true then fill this with table information relavant to the question")
-class validate_sql_struct(BaseModel):
-    valid: bool=Field(description="set it to be True if generted sql query is valid otherwise set it to be False")
-    issues:Optional[str]=Field(description="if there is error/issues in generated sql query then highlight the issues and error")
-    corrected_query: str=Field(description="it there is issues in the generated sql query then provide the correct sql query")
+# class parse_question_stuct_inner(BaseModel):
+#     table_name: str=Field(description="name of the table")
+#     columns: list[str]=Field(description="list of all columns which is important respective to the question")
+#     noun_columns: list[str]=Field(description="it contain only the columns that are relevant to the question and contain nouns or names")
+# class parse_question_stuct(BaseModel):
+#     is_relevant:bool=Field(description="it is set to False if question is not related to the database or if the question has no enough information")
+#     relevant_tables:list[parse_question_stuct_inner]=Field(description="if is_relevant is set to be true then fill this with table information relavant to the question")
+# class validate_sql_struct(BaseModel):
+#     valid: bool=Field(description="set it to be True if generted sql query is valid otherwise set it to be False")
+#     issues:Optional[str]=Field(description="if there is error/issues in generated sql query then highlight the issues and error")
+#     corrected_query: str=Field(description="it there is issues in the generated sql query then provide the correct sql query")
 ############
 
 #node-1
@@ -414,30 +389,51 @@ def parse_question(state: dict) -> dict:
     schema = get_schema()
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", '''You are a data analyst that can help summarize SQL tables and parse user questions about a database. 
-Given the question and database schema, identify the relevant tables and columns. 
-If the question is not relevant to the database or if there is not enough information to answer the question, set is_relevant to false.
-The "noun_columns" field should contain only the columns that are relevant to the question and contain nouns or names, for example, the column "Artist name" contains nouns relevant to the question "What are the top selling artists?", but the column "Artist ID" is not relevant because it does not contain a noun. Do not include columns that contain numbers.
+        ("system", '''You are a database analyst that analyzes SQL database schemas and user questions.
+Your task is to identify which tables and columns in the database are needed to answer the user's question.
+
+Review the database schema carefully and determine:
+1. Is the question answerable using this database?
+2. Which specific tables are needed?
+3. Which specific columns from those tables are required?
+4. Which columns contain meaningful text/names that match nouns in the question?
+
+Respond with this exact JSON structure:
+{{
+    "is_relevant": boolean,  // true if the question can be answered with this database
+    "relevant_tables": [
+        {{
+            "table_name": string,  // name of a relevant table
+            "columns": [string],   // all columns needed from this table
+            "noun_columns": [string]  // only columns containing text/names/nouns
+        }}
+    ]
+}}
+
+For "noun_columns", include only columns that contain actual text values like names, descriptions, or categories - not IDs or numeric values. For example, "product_name" would be a noun column, but "product_id" would not.
 '''),
-        ("human", "===Database schema:\n{schema}\n\n===User question:\n{question}\n\nIdentify relevant tables and columns:")
+        ("human", "DATABASE SCHEMA:\n{schema}\n\nUSER QUESTION:\n{question}\n\nIdentify the relevant tables and columns:")
     ])
 
+    output_parser = JsonOutputParser()
     
-    response = llm.with_structured_output(parse_question_stuct).invoke(prompt.format_messages(schema=schema, question=question))
-    return {"parsed_question":response}
+    response = llm.invoke(prompt.format_messages(schema=schema, question=question)).content
+    parsed_response = output_parser.parse(re.sub(r'<think>.*?</think>', '',response,flags=re.DOTALL))
+    return {"parsed_question": parsed_response}
+
 
 #node-2
 def get_unique_nouns(state: dict) -> dict:
     """Find unique nouns in relevant tables and columns."""
     parsed_question = state['parsed_question']
     
-    if not parsed_question.is_relevant:
+    if not parsed_question['is_relevant']:
         return {"unique_nouns": []}
 
     unique_nouns = set()
-    for table_info in parsed_question.relevant_tables:
-        table_name = table_info.table_name
-        noun_columns = table_info.noun_columns
+    for table_info in parsed_question['relevant_tables']:
+        table_name = table_info['table_name']
+        noun_columns = table_info['noun_columns']
         
         if noun_columns:
             column_names = ', '.join(f"{col}" for col in noun_columns)
@@ -451,7 +447,7 @@ def get_unique_nouns(state: dict) -> dict:
 def generate_sql(state: dict) -> dict:
     """Generate SQL query based on parsed question and unique nouns."""
     question = state['question']
-    parsed_question = state['parsed_question'].model_dump()
+    parsed_question = state['parsed_question']
     unique_nouns = state['unique_nouns']
 
     if not parsed_question['is_relevant']:
@@ -460,47 +456,49 @@ def generate_sql(state: dict) -> dict:
     schema = get_schema()
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", '''
-You are an AI assistant that generates SQL queries based on user questions, database schema, and unique nouns found in the relevant tables. Generate a valid SQL query to answer the user's question.
+        ("system", '''You are an expert MySQL developer who writes precise SQL queries to answer user questions.
 
-If there is not enough information to write a SQL query, respond with "NOT_ENOUGH_INFO".
+Given a database schema, a question, and unique text values from the database, write a SQL query that will correctly answer the user's question.
 
-Here are some examples:
+IMPORTANT GUIDELINES:
+1. Always use backticks (`) around table and column names
+2. Filter out NULL values, empty strings, and "N/A" values
+3. Ensure your query is properly formatted and includes appropriate joins
+4. For visualization purposes, keep your result set simple - 2-3 columns max
+5. For aggregation queries, use GROUP BY and appropriate aggregation functions
+6. For questions about distribution or trends, ensure your query provides data suitable for visualization
+7.never use \\n(new line caracter) between the query
 
-1. What is the top selling product?
-Answer: SELECT product_name, SUM(quantity) as total_quantity FROM sales WHERE product_name IS NOT NULL AND quantity IS NOT NULL AND product_name != "" AND quantity != "" AND product_name != "N/A" AND quantity != "N/A" GROUP BY product_name ORDER BY total_quantity DESC LIMIT 1
+If you cannot write a query with the available information, respond with "NOT_ENOUGH_INFO".
 
-2. What is the total revenue for each product?
-Answer: SELECT \product name\, SUM(quantity * price) as total_revenue FROM sales WHERE \product name\ IS NOT NULL AND quantity IS NOT NULL AND price IS NOT NULL AND \product name\ != "" AND quantity != "" AND price != "" AND \product name\ != "N/A" AND quantity != "N/A" AND price != "N/A" GROUP BY \product name\  ORDER BY total_revenue DESC
+COMMON QUERY PATTERNS:
+- For "top/best/highest" questions: 
+  SELECT `column_name`, COUNT(*) FROM `table` WHERE `column_name` IS NOT NULL GROUP BY `column_name` ORDER BY COUNT(*) DESC LIMIT 1
 
-3. What is the market share of each product?
-Answer: SELECT \product name\, SUM(quantity) * 100.0 / (SELECT SUM(quantity) FROM sa  les) as market_share FROM sales WHERE \product name\ IS NOT NULL AND quantity IS NOT NULL AND \product name\ != "" AND quantity != "" AND \product name\ != "N/A" AND quantity != "N/A" GROUP BY \product name\  ORDER BY market_share DESC
+- For comparing categories: 
+  SELECT `category_column`, SUM(`value_column`) FROM `table` WHERE `category_column` IS NOT NULL GROUP BY `category_column` ORDER BY SUM(`value_column`) DESC
 
-4. Plot the distribution of income over time
-Answer: SELECT income, COUNT(*) as count FROM users WHERE income IS NOT NULL AND income != "" AND income != "N/A" GROUP BY income
+- For time-based trends: 
+  SELECT `date_column`, SUM(`value_column`) FROM `table` WHERE `date_column` IS NOT NULL GROUP BY `date_column` ORDER BY `date_column`
 
-THE RESULTS SHOULD ONLY BE IN THE FOLLOWING FORMAT, SO MAKE SURE TO ONLY GIVE TWO OR THREE COLUMNS:
-[[x, y]]
-or 
-[[label, x, y]]
-             
-For questions like "plot a distribution of the fares for men and women", count the frequency of each fare and plot it. The x axis should be the fare and the y axis should be the count of people who paid that fare.
-SKIP ALL ROWS WHERE ANY COLUMN IS NULL or "N/A" or "".
-Just give the query string. Do not format it. Make sure to use the correct spellings of nouns as provided in the unique nouns list. All the table and column names should be enclosed in backticks.
+- For relationship analysis: 
+  SELECT `column1`, `column2`, COUNT(*) FROM `table` WHERE `column1` IS NOT NULL AND `column2` IS NOT NULL GROUP BY `column1`, `column2`
+
+Consider the unique nouns provided, and make sure your query uses correct spellings and names exactly as they appear in the database.
 '''),
-        ("human", '''===Database schema:
+        ("human", '''DATABASE SCHEMA:
 {schema}
 
-===User question:
+USER QUESTION:
 {question}
 
-===Relevant tables and columns:
+RELEVANT TABLES AND COLUMNS:
 {parsed_question}
 
-===Unique nouns in relevant tables:
+UNIQUE NOUNS IN DATABASE:
 {unique_nouns}
 
-Generate SQL query string'''),
+Write Only a SQL_query that answers this question.Don't output any explanation or thought's:'''),
     ])
 
     response = llm.invoke(prompt.format_messages(schema=schema, question=question, parsed_question=parsed_question, unique_nouns=unique_nouns)).content
@@ -508,7 +506,8 @@ Generate SQL query string'''),
     if response.strip() == "NOT_ENOUGH_INFO":
         return {"sql_query": "NOT_RELEVANT"}
     else:
-        return {"sql_query": response}
+        return {"sql_query": re.sub(r'\n','',re.sub(r'<think>.*?</think>', '',response,flags=re.DOTALL))}
+
 #node-4
 def validate_and_fix_sql(state: dict) -> dict:
     """Validate and fix the generated SQL query."""
@@ -520,43 +519,39 @@ def validate_and_fix_sql(state: dict) -> dict:
     schema = get_schema()
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", r'''
-You are an AI assistant that validates and fixes SQL queries. Your task is to:
-1. Check if the SQL query is valid.
-2. Ensure all table and column names are correctly spelled and exist in the schema. All the table and column names should be enclosed in backticks.
-3. If there are any issues, fix them and provide the corrected SQL query.
-4. If no issues are found, return the original query.
+        ("system", '''You are a SQL expert who validates and fixes SQL queries.
+
+Examine the provided SQL query and database schema to:
+1. Verify that all table and column names exist in the schema
+2. Check that table and column names are properly enclosed in backticks (`)
+3. Ensure proper join conditions if multiple tables are used
+4. Verify that all SQL syntax is correct
+5. Check that aggregation functions are used correctly with GROUP BY clauses
+6.check for unwanted text in the query such as newline charcter,sql,etc...
+7.check whether the paranthesis() are correctly opened and closed
+If you find any issues, fix them and provide the corrected query.
+
+Respond with ONLY this JSON format no other explanation:
+{{
+    "valid": boolean,  // true if query is valid, false if issues found
+    "issues": string or null,  // description of issues found, or null if none
+    "corrected_query": string  // fixed query or "None" if no fixes needed
+}}
 '''),
-        ("human", r"""===Database schema:
+        ("human", '''DATABASE SCHEMA:
 {schema}
 
-===Generated SQL query:
+SQL QUERY TO VALIDATE:
 {sql_query}
 
-For example:
-1. {{
-    "valid": true,
-    "issues": null,
-    "corrected_query": "None"
-}}
-             
-2. {{
-    "valid": false,
-    "issues": "Column USERS does not exist",
-    "corrected_query": "SELECT * FROM \users\ WHERE age > 25"
-}}
-
-3. {{
-    "valid": false,
-    "issues": "Column names and table names should be enclosed in backticks if they contain spaces or special characters",
-    "corrected_query": "SELECT * FROM \gross income\ WHERE \age\ > 25"
-}}
-             
-""")
+Validate this query and provide fixes if needed:''')
     ])
 
-    response = llm.with_structured_output(validate_sql_struct).invoke(prompt.format_messages(schema=schema, sql_query=sql_query))
-    result=response.model_dump()
+    output_parser = JsonOutputParser()
+    response = llm.invoke(prompt.format_messages(schema=schema, sql_query=sql_query)).content
+    response=re.sub(r'<think>.*?</think>', '',response,flags=re.DOTALL)
+    result = output_parser.parse(response)
+
     if result["valid"] and result["issues"] is None:
         return {"sql_query": sql_query, "sql_valid": True}
     else:
@@ -565,6 +560,7 @@ For example:
             "sql_valid": result["valid"],
             "sql_issues": result["issues"]
         }
+
 # node-5
 def execute_sql(state: dict) -> dict:
     """Execute SQL query and return results."""
@@ -577,7 +573,7 @@ def execute_sql(state: dict) -> dict:
         results = execute_query(query)
         return {"results": results}
     except Exception as e:
-        return {"error": str(e)}
+        return {"results": "NOT_RELEVANT","error": str(e)}
 #node-6
 def format_results(state: dict) -> dict:
     """Format query results into a human-readable response."""
@@ -585,15 +581,31 @@ def format_results(state: dict) -> dict:
     results = state['results']
 
     if results == "NOT_RELEVANT":
-        return {"answer": "Sorry, I can only give answers relevant to the database."}
+        return {"answer": "I can only answer questions related to the database. Your question doesn't seem to be about the data I have access to."}
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are an AI assistant that formats database query results into a human-readable response. Give a conclusion to the user's question based on the query results. Do not give the answer in markdown format. Only give the answer in one line."),
-        ("human", "User question: {question}\n\nQuery results: {results}\n\nFormatted response:"),
+        ("system", '''You are a data analyst who explains SQL query results clearly and concisely.
+
+Given a user's question and the query results, create a brief, informative response that:
+1. Directly answers the user's question
+2. Provides key insights from the data
+3. Mentions specific numbers or trends if relevant
+4. Presents the information in a natural, conversational way
+
+Keep your response concise - ideally one or two sentences. Don't use formatting like bullet points or markdown.
+'''),
+        ("human", '''USER QUESTION: 
+{question}
+
+QUERY RESULTS:
+{results}
+
+Create a clear, concise answer based on these results:'''),
     ])
 
     response = llm.invoke(prompt.format_messages(question=question, results=results)).content
-    return {"answer": response}
+    return {"answer": re.sub(r'<think>.*?</think>', '',response,flags=re.DOTALL)}
+
 # node-7
 def choose_visualization(state: dict) -> dict:
     """Choose an appropriate visualization for the data."""
@@ -605,42 +617,53 @@ def choose_visualization(state: dict) -> dict:
         return {"visualization": "none", "visualization_reasoning": "No visualization needed for irrelevant questions."}
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", '''
-You are an AI assistant that recommends appropriate data visualizations. Based on the user's question, SQL query, and query results, suggest the most suitable type of graph or chart to visualize the data. If no visualization is appropriate, indicate that.
+        ("system", '''You are a data visualization expert who recommends the best chart type for presenting data.
 
-Available chart types and their use cases:
-- Bar Graphs: Best for comparing categorical data or showing changes over time when categories are discrete and the number of categories is more than 2. Use for questions like "What are the sales figures for each product?" or "How does the population of cities compare? or "What percentage of each city is male?"
-- Horizontal Bar Graphs: Best for comparing categorical data or showing changes over time when the number of categories is small or the disparity between categories is large. Use for questions like "Show the revenue of A and B?" or "How does the population of 2 cities compare?" or "How many men and women got promoted?" or "What percentage of men and what percentage of women got promoted?" when the disparity between categories is large.
-- Scatter Plots: Useful for identifying relationships or correlations between two numerical variables or plotting distributions of data. Best used when both x axis and y axis are continuous. Use for questions like "Plot a distribution of the fares (where the x axis is the fare and the y axis is the count of people who paid that fare)" or "Is there a relationship between advertising spend and sales?" or "How do height and weight correlate in the dataset? Do not use it for questions that do not have a continuous x axis."
-- Pie Charts: Ideal for showing proportions or percentages within a whole. Use for questions like "What is the market share distribution among different companies?" or "What percentage of the total revenue comes from each product?"
-- Line Graphs: Best for showing trends and distributionsover time. Best used when both x axis and y axis are continuous. Used for questions like "How have website visits changed over the year?" or "What is the trend in temperature over the past decade?". Do not use it for questions that do not have a continuous x axis or a time based x axis.
+Based on the user's question, SQL query, and results, determine the most appropriate visualization type.
 
-Consider these types of questions when recommending a visualization:
-1. Aggregations and Summarizations (e.g., "What is the average revenue by month?" - Line Graph)
-2. Comparisons (e.g., "Compare the sales figures of Product A and Product B over the last year." - Line or Column Graph)
-3. Plotting Distributions (e.g., "Plot a distribution of the age of users" - Scatter Plot)
-4. Trends Over Time (e.g., "What is the trend in the number of active users over the past year?" - Line Graph)
-5. Proportions (e.g., "What is the market share of the products?" - Pie Chart)
-6. Correlations (e.g., "Is there a correlation between marketing spend and revenue?" - Scatter Plot)
+AVAILABLE VISUALIZATION TYPES:
+- bar: For comparing categories (vertical bars)
+- horizontal_bar: For comparing categories with fewer items or large value differences
+- line: For showing trends over time or continuous data
+- pie: For showing proportions of a whole (limited to 2-7 categories)
+- scatter: For showing relationships between two variables
+- none: When no visualization is appropriate
 
-Provide your response in the following format:
-Recommended Visualization: [Chart type or "None"]. ONLY use the following names: bar, horizontal_bar, line, pie, scatter, none
-Reason: [Brief explanation for your recommendation]
+SELECTION GUIDELINES:
+- Bar charts: Best for comparing discrete categories
+- Line charts: Best for time series or continuous data
+- Pie charts: Best for showing percentage breakdowns (use sparingly)
+- Scatter plots: Best for showing correlation between two variables
+- Horizontal bars: Best for comparing categories with long names or few items
+
+Select exactly ONE visualization type from the list above.
 '''),
-        ("human", '''
-User question: {question}
-SQL query: {sql_query}
-Query results: {results}
+        ("human", '''USER QUESTION: 
+{question}
 
-Recommend a visualization:'''),
+SQL QUERY:
+{sql_query}
+
+QUERY RESULTS:
+         
+{results}
+
+What visualization would best represent this data? Answer in this format:
+Recommended Visualization: [type]
+Reason: [brief explanation]'''),
     ])
 
     response = llm.invoke(prompt.format_messages(question=question, sql_query=sql_query, results=results)).content
-    
-    lines = response.split('\n')
-    visualization = lines[0].split(': ')[1]
-    reason = lines[1].split(': ')[1]
-    return {"visualization": visualization, "visualization_reason": reason}
+    response=re.sub(r'<think>.*?</think>','',response,flags=re.DOTALL)
+    match = re.search(r"Recommended Visualization:\s*(\w+)\nReason:\s*(.*)", response, flags=re.DOTALL)
+    visualization='none'
+    reason=' '
+    if match:
+        visualization = match.group(1)  # Extracts "none"
+        reason = match.group(2)  # Extracts the full Reason text
+
+    return {"visualization": visualization, "visualization_reason": [reason]}
+
 #node-8
 def format_data_for_visualization(state: dict) -> dict:
     """Format the data for the chosen visualization type."""
@@ -651,28 +674,11 @@ def format_data_for_visualization(state: dict) -> dict:
 
     if visualization == "none":
         return {"formatted_data_for_visualization": None}
-    
-    if visualization == "scatter":
-        try:
-            return _format_scatter_data(results)
-        except Exception as e:
-            return _format_other_visualizations(visualization, question, sql_query, results)
-    
-    if visualization == "bar" or visualization == "horizontal_bar":
-        try:
-            return _format_bar_data(results, question)
-        except Exception as e:
-            return _format_other_visualizations(visualization, question, sql_query, results)
-    
-    if visualization == "line":
-        try:
-            return _format_line_data(results, question)
-        except Exception as e:
-            return _format_other_visualizations(visualization, question, sql_query, results)
-    
     return _format_other_visualizations(visualization, question, sql_query, results)
 def create_workflow():
     """Create and configure the workflow graph."""
+    global llm
+    llm=ChatGroq(model="qwen-qwq-32b")
     workflow = StateGraph(State)
     # Add nodes to the graph
     workflow.add_node("parse_question", parse_question)
@@ -697,3 +703,6 @@ def create_workflow():
     workflow.add_edge("format_results", END)
     return workflow.compile()
 
+# w = create_workflow()
+# result = w.invoke({"question": 'how much rupees muppidathi needs to return back.'})
+# print(result)

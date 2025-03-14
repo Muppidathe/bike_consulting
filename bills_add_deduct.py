@@ -25,30 +25,31 @@ def fetch_bills(name, phone_no):
         st.stop()
         return None
 
-def add_bills(id, bills_date, bills):
+def add_bills(id, bills_date, bill_amount):
     if not bills_date:
         st.error("Please provide an expense date.")
-    elif not bills:
+    elif not bill_amount:
+        st.write(bill_amount)
         st.error("Please provide an amount.")
     else:
         try:
             query = "INSERT INTO bills (user_id, date, amount,given) VALUES (%s, %s, %s,1);"
-            dbcursor.execute(query, (id, bills_date, bills))
+            dbcursor.execute(query, (id, bills_date, bill_amount))
             mydb.commit()
             st.success("Bill has been added successfully.")
             st.balloons()
         except Exception as e:
             st.error(f"Error while inserting: {e}")
 
-def less_bills(id, bills_date, bills):
+def less_bills(id, bills_date, bill_amount):
     if not bills_date:
         st.error("Please provide an expense date.")
-    elif not bills:
+    elif not bill_amount:
         st.error("Please provide an amount.")
     else:
         try:
             query = "INSERT INTO bills (user_id, date, amount,given) VALUES (%s, %s, %s,0);"
-            dbcursor.execute(query, (id, bills_date, bills))
+            dbcursor.execute(query, (id, bills_date, bill_amount))
             mydb.commit()
             st.success("Bill has been deducted successfully.")
             st.balloons()
@@ -72,18 +73,18 @@ if result:
 
     with col[0]:
         st.write("**Add Bill**")
-        with st.form("add"):
+        with st.form("add",clear_on_submit=True):
             st.text_input(label="Name", value=result[1], disabled=True)
             st.number_input(label="Phone No", value=int(result[2]), disabled=True)
             bills_date = st.date_input(label="Date", value=date.today())
             bills = st.number_input(label="Amount", value=None, min_value=0)
             submit = st.form_submit_button(label="Add")
             if submit:
-                add_bills(result[0], bills_date, bills)
+                add_bills(result[0], bills_date,bills)
 
     with col[1]:
         st.write("**Deduct Bill**")
-        with st.form("minus"):
+        with st.form("minus",clear_on_submit=True):
             st.text_input(label="Name", value=result[1], disabled=True)
             st.number_input(label="Phone No", value=int(result[2]), disabled=True)
             bills_date = st.date_input(label="Date", value=date.today())
