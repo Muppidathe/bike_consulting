@@ -11,13 +11,15 @@ def save_uploaded_file(uploaded_file,vehicle_no):
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
     return file_path
-def insert(vehicle_no,image,model,cc,purchase_date,cost_price,fine):
+def insert(vehicle_no,image,model_name,model_year,cc,purchase_date,cost_price,fine):
     if not fine:
         fine=0
     if not vehicle_no:
         st.error("enter the vehicle number")
-    elif not model:
-        st.error("enter the model name")
+    elif not model_name:
+        st.error("enter the Vehicle Name")
+    elif not model_year:
+        st.error("enter the model")
     elif not cc:
         st.error("enter the cc")
     elif not purchase_date:
@@ -31,23 +33,24 @@ def insert(vehicle_no,image,model,cc,purchase_date,cost_price,fine):
             image_path='static/vehicle/default_bike.jpg'
         try:
             vehicle_add_query = """
-            INSERT INTO vehicle (vehicle_no, image, model, cc, purchase_date,cost_price, fine) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s);
+            INSERT INTO vehicle (vehicle_no, image, model_name,model_year, cc, purchase_date,cost_price, fine) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s,%s);
         """
-            dbcursor.execute(vehicle_add_query, (vehicle_no,image_path, model, cc, purchase_date, cost_price, fine))
+            dbcursor.execute(vehicle_add_query, (vehicle_no,image_path, model_name,model_year, cc, purchase_date, cost_price, fine))
             mydb.commit()
             st.success('vehicle has added')
             st.balloons()
         except Exception as e:
             st.error("error while inserting",e)
-with st.form("my_form"):
+with st.form("my_form",clear_on_submit=True):
     vehicle_no=st.text_input(placeholder="TN10G7871",label="Vehicle Number").upper()
     image=st.file_uploader(label="Vechile Image",type=['png', 'jpg','jpeg'])
-    model=st.text_input(placeholder="R15",label="Model").upper()
+    model_name=st.text_input(placeholder="R15",label="Vehicle Name").upper()
+    model_year=st.number_input(placeholder="2012",label="Model",value=None,min_value=0)
     cc=st.number_input(placeholder="150",label="CC",value=None,min_value=0)
     purchase_date=st.date_input(label="Purchasing Date",value=date.today())
     cost_price=st.number_input(placeholder="80000",label="Cost Price",value=None,min_value=0)
     fine=st.number_input(placeholder="1500",label="Fine Amount",value=None,min_value=0)
     submit=st.form_submit_button(label="submit")
     if submit:
-        insert(vehicle_no,image,model,cc,purchase_date,cost_price,fine)
+        insert(vehicle_no,image,model_name,model_year,cc,purchase_date,cost_price,fine)

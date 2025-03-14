@@ -23,7 +23,7 @@ def fetch_bills_payable(name,phone_no):
         return None
 def fetch_bills(user_id):
     try:
-        query="select id,date,amount from bills WHERE user_id = %s;"
+        query="select id,date,amount,given from bills WHERE user_id = %s;"
         dbcursor.execute(query, (user_id,))
         result = dbcursor.fetchall()
         if result:
@@ -86,7 +86,7 @@ if result:
         with st.form(key=str(i[0])):
             id=i[0]
             bills_date=st.date_input(label="Date",value=i[1],disabled=True)
-            amount=st.number_input(label="Amount",value=i[2],disabled=True)
+            amount=st.number_input(label="Given Amount" if i[3]==1 else "Received Amount",value=i[2],disabled=True)
             submit=st.form_submit_button(label="delete")
             if submit:
                 delete_bills(id)

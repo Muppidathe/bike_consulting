@@ -93,7 +93,6 @@ st.markdown(f"""
 
 # Table display
 dataframe_query = f"select name,phone_no,date,sum(if(given=1,amount,0)) as 'money given',sum(if(given=0,amount,0)) as 'money taken',sum(if(given=1,amount,0))-sum(if(given=0,amount,0)) as 'balance' from bills_payable bp left join bills b on bp.id=b.user_id;"
-st.write(dataframe_query)
 df = pd.read_sql(dataframe_query, mydb)
 df.index = df.index + 1
 if len(df.index)>0:

@@ -13,7 +13,7 @@ if 'list_dashboard_result' not in st.session_state:
 mydb,dbcursor=connection()
 def fetch_vehicle(vehicle_no):
     try:
-        query = "SELECT image,vehicle_no,model,cc,purchase_date,cost_price,fine,buyer_name,ifnull(aadhar_no,0),phone_no,sales_date,ifnull(sales_price,0),ifnull(received_amount,0) FROM vehicle  WHERE vehicle_no = %s"
+        query = "SELECT image,vehicle_no,model_name,cc,purchase_date,cost_price,fine,buyer_name,ifnull(aadhar_no,0),ifnull(phone_no,0),sales_date,ifnull(sales_price,0),ifnull(received_amount,0),model_year FROM vehicle  WHERE vehicle_no = %s"
 
         dbcursor.execute(query, (vehicle_no,))
         result = dbcursor.fetchone()
@@ -93,7 +93,8 @@ if result:
                 col=st.columns(3)
                 with col[0]:
                     st.image(image_path,use_container_width=True)
-        model=st.text_input(placeholder="R15",label="Model",value=result[2],disabled=True)
+        model=st.text_input(placeholder="R15",label="Vehicle Name",value=result[2],disabled=True)
+        cc=st.number_input(placeholder="2012",label="Model",value=result[13],disabled=True)
         cc=st.number_input(placeholder="150",label="CC",value=result[3],disabled=True)
         purchase_date=st.date_input(label="Purchasing Date",value=result[4],disabled=True)
         cost_price=st.number_input(placeholder="80000",label="Cost Price",value=result[5],disabled=True)
@@ -185,7 +186,7 @@ if result:
     </div>
     <div class="stat-card">
         <div class="card-title">Profit</div>
-        <div class="card-value">{result[2]-result[0]}</div>
+        <div class="card-value">{result[2]-result[0] if result[1] and result[1]!=0 else 0}</div>
     </div>
 </div>
 """, unsafe_allow_html=True)

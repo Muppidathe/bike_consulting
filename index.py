@@ -17,7 +17,7 @@ pages={"Manage vechile":[st.Page(page="vehicle_dashboard.py",title="Dashboard",i
                         st.Page(page="bills_edit.py",title="Edit Bills",icon=':material/edit:'),
                         st.Page(page="bills_delete.py",title="Delete Bills",icon=':material/delete:')
                         ],
-       "Business Insights":[st.Page(page="test.py",title="Chat bOt",icon=":material/smart_toy:")]}
+       "Business Insights":[st.Page(page="chat_bot.py",title="Chat bOt",icon=":material/smart_toy:")]}
 
 
 pg=st.navigation(pages,)

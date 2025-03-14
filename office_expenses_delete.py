@@ -4,8 +4,8 @@ from datetime import date
 import io
 from PIL import Image
 image=None
-if 'edit_office_exp_result' not in st.session_state:
-    st.session_state['edit_office_exp_result']=[]
+if 'del_office_exp_result' not in st.session_state:
+    st.session_state['del_office_exp_result']=[]
 mydb,dbcursor=connection()
 def fetch_vehicle(date):
     try:
@@ -41,9 +41,9 @@ with st.form("fetch_details"):
     fetch_submit=st.form_submit_button(label="Get Details")
     if fetch_submit:
         result=fetch_vehicle(date)
-        st.session_state.edit_office_exp_result=result
+        st.session_state.del_office_exp_result=result
 #form2
-result=st.session_state.edit_office_exp_result
+result=st.session_state.del_office_exp_result
 if result:
     for i in result:
         with st.form(key=str(i[0])):

@@ -12,7 +12,6 @@ from langgraph.graph import StateGraph, END
 # Define TypedDicts
 class InputState(TypedDict):
     question: str
-    uuid: str
     parsed_question: Dict[str, Any]
     unique_nouns: List[str]
     sql_query: str
@@ -35,35 +34,25 @@ class OutputState(TypedDict):
 
 import mysql.connector
 from mysql.connector import Error
-
-def extract_schema_metadata():
-    """
-    Connects to a MySQL database and extracts schema and metadata.
-    
-    For each table, it retrieves:
-      - The CREATE TABLE statement.
-      - The column names.
-      - Up to 3 sample rows.
-    
-    Parameters:
-        database_name (str): The name of the MySQL database.
-    
-    Returns:
-        dict: A dictionary with table names as keys and details as values.
-    """
+def connect():
     try:
-        # Connect to the MySQL database
-        connection = mysql.connector.connect(
-            host='localhost',
+        db= mysql.connector.connect(
+            host="localhost",
             port=3306,
-            user='root',
-            password='',
-            database="walmart"
+            user="root",
+            password="",
+            database="sasi_kannan"
         )
-        
-        if connection.is_connected():
-            cursor = connection.cursor()
-            
+        return db
+    except Error as e:
+        print("Error while connecting to MySQL", e)
+        return None
+#node-1 dependency
+def get_schema() -> str:
+    try: 
+        db=connect()
+        if db.is_connected():
+            cursor=db.cursor()        
             # Fetch list of tables
             cursor.execute("SHOW TABLES")
             tables = cursor.fetchall()
@@ -89,21 +78,9 @@ def extract_schema_metadata():
             
             cursor.close()
             return schema_details
+    except mysql.connector.Error as e:
+        raise Exception(f"Error executing query: {str(e)}")
 
-    except Error as e:
-        print("Error while connecting to MySQL", e)
-        return None
-
-    finally:
-        if 'connection' in locals() and connection.is_connected():
-            connection.close()
-
-
-
-# Database Manager Functions
-def get_schema(uuid: str) -> str:
-    """Retrieve the database schema."""
-    return extract_schema_metadata()
 
 def execute_query( query: str) -> List[Any]:
     """Execute SQL query on the MySQL database and return results."""
@@ -322,7 +299,7 @@ def _format_other_visualizations(visualization, question, sql_query, results):
 def parse_question(state: dict) -> dict:
     """Parse user question and identify relevant tables and columns."""
     question = state['question']
-    schema = get_schema(state['uuid'])
+    schema = get_schema()
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", '''You are a data analyst that can help summarize SQL tables and parse user questions about a database. 
@@ -382,7 +359,7 @@ def generate_sql(state: dict) -> dict:
     if not parsed_question['is_relevant']:
         return {"sql_query": "NOT_RELEVANT", "is_relevant": False}
     
-    schema = get_schema(state['uuid'])
+    schema = get_schema()
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", '''
@@ -442,7 +419,7 @@ def validate_and_fix_sql(state: dict) -> dict:
     if sql_query == "NOT_RELEVANT":
         return {"sql_query": "NOT_RELEVANT", "sql_valid": False}
     
-    schema = get_schema(state['uuid'])
+    schema = get_schema()
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", r'''
@@ -510,7 +487,6 @@ For example:
 def execute_sql(state: dict) -> dict:
     """Execute SQL query and return results."""
     query = state['sql_query']
-    uuid = state['uuid']
     
     if query == "NOT_RELEVANT":
         return {"results": "NOT_RELEVANT"}
@@ -617,10 +593,10 @@ def create_workflow() -> StateGraph:
 def returnGraph():
     return create_workflow().compile()
 
-def run_sql_agent(question: str, uuid: str) -> dict:
+def run_sql_agent(question: str) -> dict:
     """Run the SQL agent workflow and return the formatted answer and visualization recommendation."""
     app = create_workflow().compile()
-    result = app.invoke({"question": question, "uuid": uuid})
+    result = app.invoke({"question": question})
     return {
         "answer": result['answer'],
         "visualization": result['visualization'],
@@ -776,6 +752,7 @@ graph_instructions = {
 }
 
 # Example usage
-graph = returnGraph()
-result = run_sql_agent("city wise sales", "some-uuid")
-print(result)
+# graph = returnGraph()
+# result = run_sql_agent("city wise sales")
+# print(result)
+print(get_schema())
