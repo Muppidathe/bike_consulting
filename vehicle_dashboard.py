@@ -30,7 +30,7 @@ cost_price_query = f"select IFNULL(cost_price+fine+sum(amount),0) from vehicle v
 balance_query = f"select sum(sales_price-received_amount) from vehicle where sales_date>='{inp_date}' and sales_date<='{inp_end_date}'"
 sales_price_query = f"select ifnull(sum(received_amount),0) from vehicle where sales_date>='{inp_date}' and sales_date<='{inp_end_date}'"
 #chatgpt query
-profit_query=f"select if(ifnull(received_amount,0)=0,0,received_amount-(cost_price+fine+ifnull(sum(amount),0))) as 'profit' from vehicle v left join vehicle_expenses e on vehicle_no=vehicle_num where sales_date>='{inp_date}' and sales_date<='{inp_end_date}' group by vehicle_num"
+profit_query=f"select if(ifnull(received_amount,0)=0,0,received_amount-(cost_price+ifnull(sum(amount),0))) as 'profit' from vehicle v left join vehicle_expenses e on vehicle_no=vehicle_num where sales_date>='{inp_date}' and sales_date<='{inp_end_date}' group by vehicle_num"
 
 # Execute queries and get results
 dbcursor.execute(cost_price_query)
@@ -126,7 +126,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Table display
-dataframe_query = f"select vehicle_no,image,model_name,model_year,purchase_date,cost_price+fine+ifnull(sum(amount),0) as 'total cost price',sales_price,received_amount,sales_price-received_amount as 'balance',if(ifnull(received_amount,0)=0,0,received_amount-(cost_price+fine+ifnull(sum(amount),0))) as 'profit' from vehicle v left join vehicle_expenses ve on v.vehicle_no=ve.vehicle_num where purchase_date >= '{inp_date}' and purchase_date <= '{inp_end_date}' group by vehicle_no"
+dataframe_query = f"select vehicle_no,image,model_name,model_year,purchase_date,cost_price+ifnull(sum(amount),0) as 'total cost price',sales_price,received_amount,sales_price-received_amount as 'balance',if(ifnull(received_amount,0)=0,0,received_amount-(cost_price+fine+ifnull(sum(amount),0))) as 'profit' from vehicle v left join vehicle_expenses ve on v.vehicle_no=ve.vehicle_num where purchase_date >= '{inp_date}' and purchase_date <= '{inp_end_date}' group by vehicle_no"
 
 df = pd.read_sql(dataframe_query, mydb)
 df.index = df.index + 1

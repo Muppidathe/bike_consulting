@@ -51,7 +51,7 @@ with st.form("fetch_details"):
         st.session_state.add_exp_result=result
 result=st.session_state.add_exp_result
 if result:
-    with st.form('Expenses'):
+    with st.form('Expenses',enter_to_submit=False):
         if result[0]:  # If image exists
                 image_path = result[0] 
                 col=st.columns(3)

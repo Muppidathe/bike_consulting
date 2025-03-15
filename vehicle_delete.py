@@ -103,7 +103,7 @@ st.header("Expenses")
 result=st.session_state.delete_exp_result
 if result:
     for i in result:
-        with st.form(key=str(i[0])):
+        with st.form(key=str(i[0]),clear_on_submit=True,enter_to_submit=False):
             id=i[0]
             vehicle_no=i[1]
             expense_date=st.date_input(label="expense date",value=i[2],disabled=True)

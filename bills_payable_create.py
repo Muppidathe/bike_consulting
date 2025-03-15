@@ -21,7 +21,7 @@ def insert(name,number):
             st.balloons()
         except Exception as e:
             st.error("error while inserting",e)
-with st.form("my_form"):
+with st.form("my_form",clear_on_submit=True,enter_to_submit=False):
     name=st.text_input(placeholder="kannan",label="Name").upper()
     number=st.number_input(placeholder="950037****",label="Number",value=None,min_value=0)
     submit=st.form_submit_button(label="submit")

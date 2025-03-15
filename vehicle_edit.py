@@ -47,14 +47,14 @@ def fetch_expenses(vehicle_no):
         st.stop()
         return None
 
-def edit_vehilce(vehicle_no,images,model_name,model_year,cc,purchase_date,cost_price,fine,sales_date,sales_price):
+def edit_vehilce(vehicle_no,images,model_name,model_year,cc,purchase_date,cost_price,fine,name,aadhar_no,phone_no,sales_date,sales_price,received_amount):
     if not fine:
         fine=0
     if not sales_price:
         sales_price=0
     if not model_name:
         st.error("enter the model name")
-    if not model_year:
+    elif not model_year:
         st.error("enter the model year")
     elif not cc:
         st.error("enter the cc")
@@ -71,17 +71,17 @@ def edit_vehilce(vehicle_no,images,model_name,model_year,cc,purchase_date,cost_p
             image_path=save_uploaded_file(images,vehicle_no)
             vehicle_edit_query = """
             UPDATE vehicle
-            SET image = %s, model_name = %s,model_year=%s ,cc= %s,purchase_date=%s,cost_price=%s,fine=%s,sales_date=%s,sales_price=%s
+            SET image = %s, model_name = %s,model_year=%s ,cc= %s,purchase_date=%s,cost_price=%s,fine=%s,buyer_name=%s,aadhar_no=%s,phone_no=%s,sales_date=%s,sales_price=%s,received_amount=%s
             WHERE vehicle_no = %s
             """
-            values=(image_path,model_name,model_year,cc,purchase_date,cost_price,fine,sales_date,sales_price,vehicle_no)
+            values=(image_path,model_name,model_year,cc,purchase_date,cost_price,fine,name,aadhar_no,phone_no,sales_date,sales_price,received_amount,vehicle_no)
         else:
             vehicle_edit_query = """
             UPDATE vehicle
-            SET  model_name = %s ,model_year=%s ,cc= %s,purchase_date=%s,cost_price=%s,fine=%s,sales_date=%s,sales_price=%s
+            SET  model_name = %s ,model_year=%s ,cc= %s,purchase_date=%s,cost_price=%s,fine=%s,buyer_name=%s,aadhar_no=%s,phone_no=%s,sales_date=%s,sales_price=%s,received_amount=%s
             WHERE vehicle_no = %s
             """
-            values=(model_name,model_year,cc,purchase_date,cost_price,fine,sales_date,sales_price,vehicle_no)
+            values=(model_name,model_year,cc,purchase_date,cost_price,fine,name,aadhar_no,phone_no,sales_date,sales_price,received_amount,vehicle_no)
         try:
             dbcursor.execute(vehicle_edit_query,values)
             mydb.commit()
@@ -123,7 +123,7 @@ with st.form("fetch_details"):
 #form2
 result=st.session_state.edit_result
 if result:
-    with st.form('Expenses',clear_on_submit=True):
+    with st.form('Expenses'):
         vehicle_no=st.text_input(placeholder="TN10G7871",label="Vehicle Number",value=result[1],disabled=True)
         if result[0]:  # If image exists
                 image_path = result[0]
@@ -132,7 +132,7 @@ if result:
                     st.image(image_path,use_container_width=True)
         image_inp=st.file_uploader(label="Vechile Image",type=['png', 'jpg','jpeg'])
         model_name=st.text_input(placeholder="R15",label="Vehicle Name",value=result[2])
-        model_year=st.number_input(placeholder="150",label="Model",value=result[13])
+        model_year=st.number_input(placeholder="2012",label="Model",value=result[13])
         cc=st.number_input(placeholder="150",label="CC",value=result[3])
         purchase_date=st.date_input(label="Purchasing Date",value=result[4])
         cost_price=st.number_input(placeholder="80000",label="Cost Price",value=result[5])
@@ -145,7 +145,7 @@ if result:
         received_amount=st.number_input(placeholder="80000",label="received amount",value=result[12])
         submit=st.form_submit_button(label="Edit")
         if submit:
-            edit_vehilce(vehicle_no,image_inp,model_name,model_year,cc,purchase_date,cost_price,fine,sales_date,sales_price)
+            edit_vehilce(vehicle_no,image_inp,model_name,model_year,cc,purchase_date,cost_price,fine,name,aadhar_no,phone_no,sales_date,sales_price,received_amount)
 
 
 #form3

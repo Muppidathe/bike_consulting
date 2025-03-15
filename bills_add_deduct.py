@@ -73,7 +73,7 @@ if result:
 
     with col[0]:
         st.write("**Add Bill**")
-        with st.form("add",clear_on_submit=True):
+        with st.form("add",clear_on_submit=True,enter_to_submit=False):
             st.text_input(label="Name", value=result[1], disabled=True)
             st.number_input(label="Phone No", value=int(result[2]), disabled=True)
             bills_date = st.date_input(label="Date", value=date.today())
@@ -84,7 +84,7 @@ if result:
 
     with col[1]:
         st.write("**Deduct Bill**")
-        with st.form("minus",clear_on_submit=True):
+        with st.form("minus",clear_on_submit=True,enter_to_submit=False):
             st.text_input(label="Name", value=result[1], disabled=True)
             st.number_input(label="Phone No", value=int(result[2]), disabled=True)
             bills_date = st.date_input(label="Date", value=date.today())

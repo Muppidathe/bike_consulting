@@ -43,7 +43,7 @@ def fetch_expenses(vehicle_no):
         st.stop()
         return None   
 def fetch_dashboard(vehicle_no):
-    cost_query="select cost_price+ifnull(fine,0)+ifnull(sum(amount),0) from vehicle left join vehicle_expenses on vehicle_no=vehicle_num where vehicle_no= %s group by vehicle_no;"
+    cost_query="select cost_price+ifnull(sum(amount),0) from vehicle left join vehicle_expenses on vehicle_no=vehicle_num where vehicle_no= %s group by vehicle_no;"
     sales_query="select ifnull(sales_price,0) from vehicle where vehicle_no = %s;"
     received_amount_query="select ifnull(received_amount,0) from vehicle where vehicle_no = %s;"
     try:
@@ -103,7 +103,7 @@ if result:
         aadhar_no=st.number_input(placeholder='94** **** ****',label='Aadhar no',value=int(result[8]),disabled=True)
         phone_no=st.number_input(placeholder='1234****',label='phone no',value=int(result[9]),disabled=True)
         sales_date=st.date_input(label="sales Date",value=result[10],disabled=True)
-        sales_price=st.number_input(placeholder="80000",label="Cost Price",value=result[11],disabled=True)
+        sales_price=st.number_input(placeholder="80000",label="Sales Price",value=result[11],disabled=True)
         received_amount=st.number_input(placeholder="80000",label="received amount",value=result[12],disabled=True)
         balance_amount=st.number_input(placeholder="80000",label="balance amount",value=result[11]-result[12],disabled=True)
         submit=st.form_submit_button(label="view",disabled=True)
