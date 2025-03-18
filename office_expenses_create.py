@@ -23,7 +23,7 @@ def insert(date,description,amount):
             st.balloons()
         except Exception as e:
             st.error("error while inserting",e)
-with st.form("my_form",clear_on_submit=True):
+with st.form("my_form",clear_on_submit=True,enter_to_submit=False):
     date=st.date_input(label="Expenses Date",value=date.today())
     description=st.text_input(placeholder="pathi",label="Description").upper()
     amount=st.number_input(placeholder="12",label="Expenses",value=None,min_value=0)

@@ -40,7 +40,7 @@ def edit_info(id,expense_date,desc,expense):
         st.error(f"Error While Editing {e}")
 #-------------------------------------------------------------------------------------------------------
 #form1
-with st.form("fetch_details"):
+with st.form("fetch_details",clear_on_submit=True):
     date=st.date_input(label="expense date",value=date.today())
     fetch_submit=st.form_submit_button(label="Get Details")
     if fetch_submit:
@@ -50,7 +50,7 @@ with st.form("fetch_details"):
 result=st.session_state.edit_office_exp_result
 if result:
     for i in result:
-        with st.form(key=str(i[0])):
+        with st.form(key=str(i[0]),clear_on_submit=True):
             id=i[0]
             expense_date=st.date_input(label="Expense Date",value=i[1])
             desc=st.text_input(label="Description",value=i[2])

@@ -42,11 +42,11 @@ def insert(vehicle_no,image,model_name,model_year,cc,purchase_date,cost_price,fi
             st.balloons()
         except Exception as e:
             st.error("error while inserting",e)
-with st.form("my_form",clear_on_submit=True):
+with st.form("my_form",clear_on_submit=True,enter_to_submit=False):
     vehicle_no=st.text_input(placeholder="TN10G7871",label="Vehicle Number").upper()
     image=st.file_uploader(label="Vechile Image",type=['png', 'jpg','jpeg'])
     model_name=st.text_input(placeholder="R15",label="Vehicle Name").upper()
-    model_year=st.number_input(placeholder="2012",label="Model",value=None,min_value=0)
+    model_year=st.number_input(placeholder="2012",label="Model",value=None,min_value=0,)
     cc=st.number_input(placeholder="150",label="CC",value=None,min_value=0)
     purchase_date=st.date_input(label="Purchasing Date",value=date.today())
     cost_price=st.number_input(placeholder="80000",label="Cost Price",value=None,min_value=0)

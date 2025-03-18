@@ -84,7 +84,7 @@ with st.form("fetch_details"):
 #form 2
 result=st.session_state.edit_bills_payable
 if result:
-    with st.form('edit_payable'):
+    with st.form('edit_payable',clear_on_submit=True):
         name=st.text_input(placeholder="kannan",label="name",value=result[1])
         phone_no=st.number_input(placeholder="956642**",label="phone_no",value=int(result[2]))
         submit=st.form_submit_button(label="edit")

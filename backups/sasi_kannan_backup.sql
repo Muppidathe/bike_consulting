@@ -7,11 +7,13 @@ CREATE TABLE `bills` (
   PRIMARY KEY (`id`),
   KEY `used_id` (`user_id`),
   CONSTRAINT `used_id` FOREIGN KEY (`user_id`) REFERENCES `bills_payable` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci COMMENT='Links to the bills_payable table and stores details of the money borrowed or lent by a person';
+) ENGINE=InnoDB AUTO_INCREMENT=32 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci COMMENT='Links to the bills_payable table and stores details of the money borrowed or lent by a person';
 
 INSERT INTO bills VALUES (27, 4, 2025-03-04, 15000, 1);
 INSERT INTO bills VALUES (28, 4, 2025-03-04, 5000, 0);
 INSERT INTO bills VALUES (29, 5, 2025-03-04, 12000, 1);
+INSERT INTO bills VALUES (30, 7, 2025-03-14, 12000, 1);
+INSERT INTO bills VALUES (31, 7, 2025-03-14, 500, 0);
 
 CREATE TABLE `bills_payable` (
   `id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'it helps to uniquely identify the records/individual',
@@ -19,11 +21,12 @@ CREATE TABLE `bills_payable` (
   `phone_no` varchar(10) NOT NULL COMMENT 'Stores the contact number of the person for communication and to differentiate individuals with the same name.',
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_bills` (`name`,`phone_no`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci COMMENT='Stores details of individuals or entities to whom the company owes money or from whom it has borrowed funds.';
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci COMMENT='Stores details of individuals or entities to whom the company owes money or from whom it has borrowed funds.';
 
 INSERT INTO bills_payable VALUES (5, 'BALA', '9025640635');
 INSERT INTO bills_payable VALUES (6, 'MUPPIDATHI', '123');
 INSERT INTO bills_payable VALUES (4, 'MUPPIDATHI', '9500372044');
+INSERT INTO bills_payable VALUES (7, 'SUNDHAR', '12234');
 
 CREATE TABLE `office_expenses` (
   `id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'it is used to uniquely track the office expenses record',
@@ -44,7 +47,7 @@ CREATE TABLE `vehicle` (
   `cc` int(11) NOT NULL COMMENT 'Stores the engine capacity (CC) of the vehicle.',
   `purchase_date` date NOT NULL COMMENT 'Records the purchase date of the vehicle.',
   `cost_price` int(11) NOT NULL COMMENT 'Records the purchase cost of the vehicle.',
-  `fine` int(11) DEFAULT NULL COMMENT 'Records any fines on the vehicle at the time of purchase, which must be added to the total purchase cost.',
+  `fine` int(11) DEFAULT NULL COMMENT 'Records any fines on the vehicle at the time of purchase.',
   `buyer_name` varchar(50) DEFAULT NULL COMMENT 'Stores the name of the buyer when the vehicle is sold; remains empty until sold.',
   `aadhar_no` varchar(12) DEFAULT NULL COMMENT 'Stores the buyer’s Aadhar number; remains empty until the vehicle is sold.',
   `phone_no` varchar(10) DEFAULT NULL COMMENT 'Stores the buyer’s mobile number; remains empty until the vehicle is sold.',
@@ -54,8 +57,7 @@ CREATE TABLE `vehicle` (
   PRIMARY KEY (`vehicle_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci COMMENT='Stores vehicle details related to purchase and sales transactions.';
 
-INSERT INTO vehicle VALUES ('KL31N7871', 'static/vehicle/default_bike.jpg', 'R15', 0, 155, 2025-03-04, 146000, 1000, 'muppidathi', '1234', '9500372044', 2025-03-04, 150000, 149000);
-INSERT INTO vehicle VALUES ('TN31N7871', 'static/vehicle/default_bike.jpg', 'TVS', 2016, 100, 2025-03-08, 40000, 0, None, None, None, None, 0, None);
+INSERT INTO vehicle VALUES ('AA', 'static/vehicle/default_bike.jpg', 'A', 12, 11, 2025-03-17, 11, 0, None, None, None, None, None, None);
 
 CREATE TABLE `vehicle_expenses` (
   `id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'it is used to uniquely identify the records.',
@@ -66,7 +68,6 @@ CREATE TABLE `vehicle_expenses` (
   PRIMARY KEY (`id`),
   KEY `vehicle_no` (`vehicle_num`),
   CONSTRAINT `vehicle_no` FOREIGN KEY (`vehicle_num`) REFERENCES `vehicle` (`vehicle_no`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci COMMENT='Stores details of expenses incurred on vehicle repairs and maintenance before selling it to the customer.';
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci COMMENT='Stores details of expenses incurred on vehicle repairs and maintenance before selling it to the customer.';
 
-INSERT INTO vehicle_expenses VALUES (7, 'KL31N7871', 2025-03-04, 'TYRE', 500);
 

@@ -72,7 +72,7 @@ with st.form("fetch_details"):
 #form 2
 result=st.session_state.delete_bills_payable
 if result:
-    with st.form('edit_payable'):
+    with st.form('delete_payable',enter_to_submit=False,clear_on_submit=True):
         name=st.text_input(placeholder="kannan",label="name",value=result[1],disabled=True)
         phone_no=st.number_input(placeholder="956642**",label="phone_no",value=int(result[2]),disabled=True)
         submit=st.form_submit_button(label="delete")

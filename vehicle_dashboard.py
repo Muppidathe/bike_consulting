@@ -3,18 +3,10 @@ from streamlit_card import card
 import pandas as pd
 from datetime import date
 from db import connection
-import base64
-
+import re
 # Set responsive layout
 st.set_page_config(layout="wide")
 
-def image_to_base64(image_path):
-    with open(image_path, "rb") as img_file:
-        return base64.b64encode(img_file.read()).decode("utf-8")
-
-def path_to_image_html(path):
-    base64_str = image_to_base64(path)
-    return f'<img src="data:image/png;base64,{base64_str}" width="100">'
 
 mydb, dbcursor = connection()
 
@@ -26,12 +18,11 @@ with inputs[1]:
 
 
 # Queries
-cost_price_query = f"select IFNULL(cost_price+fine+sum(amount),0) from vehicle v,vehicle_expenses vv where v.vehicle_no=vv.vehicle_num and purchase_date>='{inp_date}' and purchase_date<='{inp_end_date}'"
+cost_price_query = f"select ifnull(sum(cost_price),0)+ifnull(sum(amount),0) from vehicle v left join vehicle_expenses vv on v.vehicle_no=vv.vehicle_num where purchase_date>='{inp_date}' and purchase_date<='{inp_end_date}'"
 balance_query = f"select sum(sales_price-received_amount) from vehicle where sales_date>='{inp_date}' and sales_date<='{inp_end_date}'"
 sales_price_query = f"select ifnull(sum(received_amount),0) from vehicle where sales_date>='{inp_date}' and sales_date<='{inp_end_date}'"
 #chatgpt query
-profit_query=f"select if(ifnull(received_amount,0)=0,0,received_amount-(cost_price+fine+ifnull(sum(amount),0))) as 'profit' from vehicle v left join vehicle_expenses e on vehicle_no=vehicle_num where sales_date>='{inp_date}' and sales_date<='{inp_end_date}' group by vehicle_num"
-
+profit_query=f"select if(ifnull(received_amount,0)=0,0,received_amount-(cost_price+ifnull(sum(amount),0))) as 'profit' from vehicle v left join vehicle_expenses e on vehicle_no=vehicle_num where sales_date>='{inp_date}' and sales_date<='{inp_end_date}' group by vehicle_num"
 # Execute queries and get results
 dbcursor.execute(cost_price_query)
 res = dbcursor.fetchone()
@@ -126,10 +117,13 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Table display
-dataframe_query = f"select vehicle_no,image,model_name,model_year,purchase_date,cost_price+fine+ifnull(sum(amount),0) as 'total cost price',sales_price,received_amount,sales_price-received_amount as 'balance',if(ifnull(received_amount,0)=0,0,received_amount-(cost_price+fine+ifnull(sum(amount),0))) as 'profit' from vehicle v left join vehicle_expenses ve on v.vehicle_no=ve.vehicle_num where purchase_date >= '{inp_date}' and purchase_date <= '{inp_end_date}' group by vehicle_no"
+dataframe_query = f"select vehicle_no,image,model_name,model_year,purchase_date,cost_price+ifnull(sum(amount),0) as 'total cost price',sales_price,received_amount,sales_price-received_amount as 'balance',if(ifnull(received_amount,0)=0,0,received_amount-(cost_price+fine+ifnull(sum(amount),0))) as 'profit' from vehicle v left join vehicle_expenses ve on v.vehicle_no=ve.vehicle_num where purchase_date >= '{inp_date}' and purchase_date <= '{inp_end_date}' group by vehicle_no"
 
 df = pd.read_sql(dataframe_query, mydb)
 df.index = df.index + 1
-if len(df.index)>0:
-    df['image'] = df['image'].map(path_to_image_html)
-    st.write(df.to_html(escape=False), unsafe_allow_html=True)
+if not df.empty:
+    df['image'] = df['image'].apply(lambda x: 'http://localhost/vehicle_images/'+re.sub('static/vehicle/','',x))  # Markdown-style image rendering
+    st.data_editor(df, hide_index=False, disabled=True,column_config={
+        "image": st.column_config.ImageColumn("Image", help="Vehicle Image", width="medium")
+    })
+    

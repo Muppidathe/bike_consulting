@@ -55,7 +55,7 @@ with st.form("fetch_details"):
         st.session_state.sold_result=result
 result=st.session_state.sold_result
 if result:
-    with st.form('Expenses'):
+    with st.form('Expenses',enter_to_submit=False,clear_on_submit=True):
         if result[0]:  # If image exists
                 image_path = result[0] 
                 col=st.columns(3)
@@ -70,8 +70,8 @@ if result:
         name=st.text_input(placeholder="muppidathi",label='Buyer Name')
         aadhar_no=st.number_input(placeholder='94** **** ****',label='Aadhar no',value=None,min_value=0)
         phone_no=st.number_input(placeholder='1234****',label='phone no',value=None,min_value=0)
-        sales_date=st.date_input(label="Purchasing Date")
-        sales_price=st.number_input(placeholder="80000",label="Cost Price",value=None,min_value=0)
+        sales_date=st.date_input(label="Sales Date")
+        sales_price=st.number_input(placeholder="80000",label="Sales Price",value=None,min_value=0)
         received_amount=st.number_input(placeholder="80000",label="received amount",value=None,min_value=0)
         submit=st.form_submit_button(label="Add sales detail")
         if submit:
