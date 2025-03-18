@@ -1,8 +1,6 @@
 import streamlit as st
 from db import connection
-from datetime import date
-import io
-from PIL import Image
+import os
 image=None
 if 'delete_result' not in st.session_state:
     st.session_state['delete_result']=()
@@ -41,7 +39,7 @@ def fetch_expenses(vehicle_no):
         st.stop()
         return None
 
-def delete_vehicle(vehicle_no):
+def delete_vehicle(vehicle_no,image_path):
 
     try:
         vehicle_delete_query="delete from vehicle where vehicle_no=%s"
@@ -49,6 +47,8 @@ def delete_vehicle(vehicle_no):
         dbcursor.execute(vehicle_delete_query1,(vehicle_no,))
         dbcursor.execute(vehicle_delete_query,(vehicle_no,))
         mydb.commit()
+        if image_path!='static/vehicle/default_bike.jpg':
+            os.remove(image_path)
         st.success('vehicle deleted')
         st.balloons()
     except Exception as e:
@@ -97,7 +97,7 @@ if result:
         received_amount=st.number_input(placeholder="80000",label="received amount",value=result[12],disabled=True)
         submit=st.form_submit_button(label="delete")
         if submit:
-            delete_vehicle(vehicle_no)
+            delete_vehicle(vehicle_no,image_path)
 #form3
 st.header("Expenses")
 result=st.session_state.delete_exp_result
